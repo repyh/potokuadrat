@@ -1,3 +1,11 @@
-// Add product tables here after the domain model is agreed.
 // Drizzle owns the Postgres schema and generated migrations.
-export {};
+// pg-boss keeps its own tables and is not declared here.
+
+export * from "./albums";
+export * from "./analytics";
+export * from "./auth";
+export * from "./drive";
+export * from "./enums";
+export * from "./organization";
+export * from "./photos";
+export * from "./shares";
