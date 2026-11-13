@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T00:38:50.8751742+07:00",
+  "title": "Design System: Potokuadrat",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Botanical Ink",
+        "canonical": "#183c34",
+        "tonalRamp": [
+          "#0b1714",
+          "#102821",
+          "#183c34",
+          "#285548",
+          "#477365",
+          "#78958a",
+          "#b6c9c1",
+          "#e7f0eb"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Green Page Ground",
+        "canonical": "#dce6d3",
+        "tonalRamp": [
+          "#1e271d",
+          "#313d30",
+          "#4b5b49",
+          "#697a65",
+          "#899885",
+          "#a9b8a5",
+          "#c5d1c2",
+          "#dce6d3"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Folio Paper",
+        "canonical": "#e9eee2",
+        "tonalRamp": [
+          "#1d2418",
+          "#313b2b",
+          "#4a5742",
+          "#69775f",
+          "#8c9a80",
+          "#b0bda5",
+          "#d0dbca",
+          "#e9eee2"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Open Folio Surface",
+        "canonical": "#f8f8f0",
+        "tonalRamp": [
+          "#222219",
+          "#39392e",
+          "#555548",
+          "#747464",
+          "#929283",
+          "#b4b4a6",
+          "#d9d9cc",
+          "#f8f8f0"
+        ]
+      },
+      "accent": {
+        "role": "accent",
+        "displayName": "Leaf Tab",
+        "canonical": "#d9ef63",
+        "tonalRamp": [
+          "#303d08",
+          "#4a5c13",
+          "#657b20",
+          "#829d31",
+          "#a5c342",
+          "#c2dc50",
+          "#d9ef63",
+          "#eff8be"
+        ]
+      },
+      "quiet": {
+        "role": "secondary",
+        "displayName": "Quiet Green",
+        "canonical": "#50675d",
+        "tonalRamp": [
+          "#141c18",
+          "#26332d",
+          "#394a42",
+          "#50675d",
+          "#70847a",
+          "#91a49a",
+          "#bac7bf",
+          "#e5ece8"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Page Rule",
+        "canonical": "#c6d0c3",
+        "tonalRamp": [
+          "#192019",
+          "#2f392f",
+          "#4d584d",
+          "#6e796d",
+          "#919c90",
+          "#adb8ac",
+          "#c6d0c3",
+          "#edf1eb"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Young Serif",
+        "purpose": "Page titles, organizer names, document titles, and short folio notes."
+      },
+      "body": {
+        "displayName": "Arial",
+        "purpose": "Navigation, body copy, labels, metadata, and controls."
+      }
+    },
+    "shadows": [
+      {
+        "name": "folio-lift",
+        "value": "0 24px 56px color-mix(in srgb, var(--ink) 14%, transparent)",
+        "purpose": "Lift the full folio from its surrounding green ground."
+      }
+    ],
+    "motion": [
+      {
+        "name": "folio-reveal",
+        "value": "260ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Reveal an expanded sample document from the top down."
+      },
+      {
+        "name": "link-feedback",
+        "value": "180ms ease",
+        "purpose": "Give navigation and primary actions a restrained response."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tablet",
+        "value": "920px"
+      },
+      {
+        "name": "mobile",
+        "value": "640px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main route into the public document collection.",
+      "html": "<a class=\"ds-primary\" href=\"#public-files\">Browse public documents <svg aria-hidden=\"true\" viewBox=\"0 0 20 20\" fill=\"none\"><path d=\"M4 10h11M10 5l5 5-5 5\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-primary{display:inline-flex;min-height:52px;align-items:center;justify-content:center;gap:22px;padding:0 20px;background:var(--accent,#d9ef63);color:var(--ink,#183c34);font:700 14px Arial,Helvetica,sans-serif;text-decoration:none;transition:background-color 180ms ease,color 180ms ease}.ds-primary svg{width:18px;height:18px;flex:0 0 auto;transition:transform 180ms ease}.ds-primary:hover{background:var(--ink,#183c34);color:var(--paper,#f8f8f0)}.ds-primary:focus-visible{outline:3px solid var(--accent,#d9ef63);outline-offset:4px}.ds-primary:hover svg{transform:translateX(3px)}"
+    },
+    {
+      "name": "Spine navigation",
+      "kind": "nav",
+      "refersTo": "spine-navigation",
+      "description": "Two in-page destinations held in the dark folio spine.",
+      "html": "<nav class=\"ds-spine-nav\"><a class=\"ds-active\" href=\"#organizer\">Organizer</a><a href=\"#public-files\">Public documents</a></nav>",
+      "css": ".ds-spine-nav{display:grid;gap:8px;background:var(--ink,#183c34);padding:12px}.ds-spine-nav a{display:flex;min-height:46px;align-items:center;padding:0 12px;border:1px solid transparent;color:color-mix(in srgb,var(--paper,#f8f8f0) 76%,var(--ink,#183c34));font:14px Arial,Helvetica,sans-serif;text-decoration:none;transition:border-color 180ms ease,color 180ms ease,background-color 180ms ease}.ds-spine-nav a:hover,.ds-spine-nav .ds-active{border-color:color-mix(in srgb,var(--paper,#f8f8f0) 22%,transparent);background:color-mix(in srgb,var(--paper,#f8f8f0) 8%,var(--ink,#183c34));color:var(--paper,#f8f8f0)}.ds-active::before{width:7px;height:7px;margin-right:12px;background:var(--accent,#d9ef63);content:\"\"}.ds-spine-nav a:focus-visible{outline:3px solid var(--accent,#d9ef63);outline-offset:4px}"
+    },
+    {
+      "name": "Organizer preview",
+      "kind": "card",
+      "refersTo": "organizer-card",
+      "description": "A concise configurable profile preview with a route to public files.",
+      "html": "<article class=\"ds-organizer\"><span class=\"ds-avatar\">P</span><h2>Potokuadrat</h2><p>Event organizer</p><a href=\"#public-files\">See public documents</a></article>",
+      "css": ".ds-organizer{padding:21px 22px 22px;border:1px solid var(--line,#c6d0c3);background:color-mix(in srgb,var(--brand-paper,#e9eee2) 54%,var(--paper,#f8f8f0));color:var(--ink,#183c34)}.ds-avatar{display:grid;width:72px;height:72px;place-items:center;border-radius:50%;background:var(--ink,#183c34);color:var(--accent,#d9ef63);font:28px 'Young Serif',Georgia,serif}.ds-organizer h2{margin:12px 0 0;font:25px 'Young Serif',Georgia,serif}.ds-organizer p{color:var(--quiet,#50675d);font:13px/1.5 Arial,Helvetica,sans-serif}.ds-organizer a{color:var(--ink,#183c34);font:12px Arial,Helvetica,sans-serif;text-underline-offset:4px}.ds-organizer a:hover{text-decoration:underline}.ds-organizer a:focus-visible{outline:3px solid var(--accent,#d9ef63);outline-offset:4px}"
+    },
+    {
+      "name": "Document disclosure",
+      "kind": "custom",
+      "refersTo": "document-disclosure",
+      "description": "A ruled public-file row that expands into an explicitly labeled sample preview.",
+      "html": "<details class=\"ds-document\"><summary><span class=\"ds-tab\">A</span><span><small>Welcome note</small><strong>Event overview</strong></span><span class=\"ds-toggle\"></span></summary><p>Sample preview content.</p></details>",
+      "css": ".ds-document{border-bottom:1px solid var(--line,#c6d0c3);color:var(--ink,#183c34)}.ds-document summary{display:flex;min-height:78px;align-items:center;gap:16px;cursor:pointer;list-style:none}.ds-document summary::-webkit-details-marker{display:none}.ds-tab{display:grid;width:38px;height:44px;place-items:center;border:1px solid var(--line,#c6d0c3);background:var(--brand-paper,#e9eee2);font:19px 'Young Serif',Georgia,serif}.ds-document small,.ds-document strong{display:block}.ds-document small{color:var(--quiet,#50675d);font:11px Arial,Helvetica,sans-serif}.ds-document strong{margin-top:4px;font:20px 'Young Serif',Georgia,serif}.ds-toggle{position:relative;width:24px;height:24px;margin-left:auto;border:1px solid var(--line,#c6d0c3);border-radius:50%}.ds-document p{padding:0 0 18px 54px;font:14px/1.6 Arial,Helvetica,sans-serif}.ds-document summary:focus-visible{outline:3px solid var(--accent,#d9ef63);outline-offset:3px}.ds-toggle::before,.ds-toggle::after{position:absolute;top:50%;left:50%;width:8px;height:1px;background:var(--ink,#183c34);content:\"\";transform:translate(-50%,-50%)}.ds-toggle::after{transform:translate(-50%,-50%) rotate(90deg);transition:transform 180ms ease}.ds-document[open] .ds-toggle::after{transform:translate(-50%,-50%)}"
+    },
+    {
+      "name": "Sample label",
+      "kind": "chip",
+      "refersTo": "sample-label",
+      "description": "A restrained label that distinguishes illustrative files from real event documents.",
+      "html": "<span class=\"ds-sample-label\">Sample collection</span>",
+      "css": ".ds-sample-label{display:inline-block;padding:8px 11px;border:1px solid var(--line,#c6d0c3);color:var(--quiet,#50675d);font:11px Arial,Helvetica,sans-serif;white-space:nowrap}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Open Welcome Folio",
+    "overview": "Potokuadrat is a guest folio made for the web. Its pages introduce the organizer and open directly into a useful public document index. The printed welcome packet informs the dark spine, open pale spread, ruled entries, and bright leaf tab.",
+    "keyCharacteristics": [
+      "The dark folio spine makes the event name and page destinations easy to find.",
+      "A configurable lime accent marks the primary action and current section.",
+      "Young Serif gives headings a printed character; Arial keeps navigation and metadata practical.",
+      "Ruled document rows keep the public collection direct and scannable."
+    ],
+    "rules": [
+      {
+        "name": "One Welcome Rule",
+        "body": "Introduce the organizer before asking visitors to browse the collection.",
+        "section": "layout"
+      },
+      {
+        "name": "Honest Sample Rule",
+        "body": "Mark illustrative documents as sample material until the organizer replaces them.",
+        "section": "components"
+      },
+      {
+        "name": "One Accent Rule",
+        "body": "Reserve the leaf accent for the primary action and active section.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do keep the event name, organizer details, page description, and palette configurable in config.json.",
+      "Do label all fabricated document content as sample material until an organizer replaces it.",
+      "Do keep the first viewport focused on the organizer and public-document action."
+    ],
+    "donts": [
+      "Don't imply that example files, biographies, event dates, or client references are real.",
+      "Don't turn the document index into a uniform social-media card grid.",
+      "Don't add decorative gradients, glass effects, or icon glyphs that compete with the folio's printed structure."
+    ]
+  }
+}

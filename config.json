@@ -1,0 +1,14 @@
+{
+  "eventName": "Potokuadrat",
+  "organizerName": "Potokuadrat",
+  "tagline": "One clear place for every event detail.",
+  "description": "Meet the organizer, then browse the public event files.",
+  "organizerRole": "Event organizer",
+  "organizerSummary": "Event information and public documents, shared here for guests and clients.",
+  "brand": {
+    "accent": "#d9ef63",
+    "ink": "#183c34",
+    "paper": "#e9eee2",
+    "surface": "#f8f8f0"
+  }
+}

@@ -27,3 +27,7 @@ The boundaries follow the overall approach in `documents/web/lomba-mia`: keep th
 This bootstrap deliberately does not copy SAKSI tables, endpoints, permissions, or product rules. It also does not assume authentication, public/private bucket policy, or Potokuadrat's domain model; those decisions belong with the first concrete feature.
 
 See `docs/ARCHITECTURE.md` for dependency rules and the request flow.
+
+## Site branding
+
+Edit the root `config.json` to set the name and profile details shown on the public landing page. `eventName` is the displayed site/event name; `organizerName`, `organizerRole`, `organizerSummary`, `tagline`, and `description` fill out the organizer preview and page introduction. The `brand` values set the accent, ink, paper, and surface colors. The document rows are labeled examples; replace them with real public files when the document feature is connected.
