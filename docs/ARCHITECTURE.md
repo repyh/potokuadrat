@@ -2,57 +2,107 @@
 
 ## Direction
 
-This project follows a small set of architectural conventions: a Next.js App Router application acting as a backend-for-frontend, feature-oriented UI code, explicit cross-layer contracts, and server-only use cases and repositories. The product domain, database schema, endpoints, and contracts remain specific to Potokuadrat and are intentionally undefined until its behavior is agreed.
+Potokuadrat is a self-hosted client gallery over Google Drive. A Next.js App Router
+application acts as the backend-for-frontend: it reads Drive with a service account,
+indexes photo metadata into Postgres, caches thumbnails on local disk, and serves
+share pages and downloads to anonymous clients.
+
+The product behavior is defined in `docs/specs/`; the decisions that changed the
+original plan are in `docs/adr/`. This file only covers how the code is organized.
+
+## Stack
+
+- Next.js 16 (App Router, TypeScript) on Node 24
+- Postgres 16 with Drizzle ORM (`pg` driver)
+- `pg-boss` for jobs, running in the app process for v1
+- Better Auth for organization users; signed cookies for client sessions
+- Tailwind 4 plus the in-repo design system in `src/components/ui`
+- Docker Compose: `app`, `postgres`, and a one-shot `migrate` service
 
 ## Request and data flow
 
 ```mermaid
 flowchart LR
-  Browser[Browser UI] --> Page[Next.js Server Components]
-  Browser --> Route[Route Handlers / BFF]
+  Browser[Browser UI] --> Page[Server Components]
+  Browser --> Route[Route Handlers]
   Page --> UseCase[Server use cases]
   Route --> UseCase
   UseCase --> Repo[Domain repositories]
   Repo --> Drizzle[Drizzle ORM]
-  Drizzle --> PG[Supabase Postgres]
-  Browser --> SupabaseBrowser[Supabase browser client]
-  Route --> SupabaseServer[Supabase server client]
-  SupabaseBrowser --> Storage[Supabase Storage]
-  SupabaseServer --> Storage
+  Drizzle --> PG[(Postgres 16)]
+  UseCase --> Drive[Drive client]
+  Drive --> Google[(Google Drive)]
+  UseCase --> Cache[(Thumbnail cache)]
+  Worker[Job worker] --> Repo
+  Worker --> Drive
 ```
+
+The browser never receives a Drive URL. Thumbnails and downloads are served by this
+application, which fetches from Drive and writes the stripped thumbnail to the cache.
 
 ## Ownership and dependency rules
 
 | Area | Owns |
 | --- | --- |
 | `src/app/**` | Pages, layouts, and thin HTTP route adapters |
-| `src/features/<domain>/**` | Domain-specific UI and browser interactions |
-| `src/server/api/**` | HTTP input validation, authorization, and response mapping |
-| `src/server/<domain>/**` | Use cases, repository interfaces, and persistence adapters |
-| `src/server/db/**` | Drizzle connection, schema, and database access |
-| `src/server/storage/**` | Server-side Storage operations |
-| `src/contracts/**` | Types shared across browser and server boundaries |
-| `src/lib/supabase/**` | Supabase client construction using public project credentials |
+| `src/features/<domain>/**` | Domain UI and browser interactions |
+| `src/server/api/**` | HTTP input validation, authorization, response mapping |
+| `src/server/<domain>/**` | Use cases, repository interfaces, persistence adapters |
+| `src/server/drive/**` | Drive auth, listing, thumbnail fetch, cache, segment stripping |
+| `src/server/jobs/**` | pg-boss registration and job handlers |
+| `src/server/db/**` | Drizzle connection, schema, migrations access |
+| `src/contracts/**` | Types shared across the browser/server boundary |
+| `src/components/ui/**` | Generic design-system primitives |
 | `drizzle/**` | Generated database migrations |
 
 Allowed flow:
 
 ```text
-Browser UI -> shared contract -> Route Handler -> domain API/use case -> repository -> Drizzle -> Postgres
-Browser upload or download -> Supabase Storage client -> bucket policy (RLS)
+Browser UI -> shared contract -> Route Handler -> use case -> repository -> Drizzle -> Postgres
+Route Handler -> use case -> Drive client -> thumbnail cache -> response
 ```
 
-Client components must not import `src/server/**`, Drizzle, or database credentials. Route Handlers should delegate rather than contain business rules or SQL. Keep validation at the HTTP boundary; TypeScript types alone do not validate input. Mark server-only modules with `server-only`.
+Client components must not import `src/server/**`, Drizzle, or credentials. Route
+Handlers delegate instead of holding business rules. Validate at the HTTP boundary;
+TypeScript types do not validate input. Mark server-only modules with `server-only`.
 
-## Database and files
+## Domain rules that affect structure
 
-- Drizzle schema definitions are the source of truth for application-owned Postgres tables; commit generated SQL migrations and review them before deployment.
-- Use `DATABASE_URL` for the app's pooled Postgres connection. Use `MIGRATION_DATABASE_URL` for Drizzle Kit when applying migrations, normally a direct connection.
-- A Drizzle connection authenticated with a database owner credential can bypass Supabase Row Level Security. Treat the BFF as a trusted boundary: every data operation still needs application authorization. If a feature relies on database RLS, configure a restricted database role and pass the intended user context explicitly before relying on those policies.
-- Supabase Storage is accessed through the Supabase SDK. Bucket access is governed by Storage policies and user-scoped sessions; never expose a service-role key to browser code.
-- Store a Storage object path and relevant metadata in Postgres when a product feature requires a durable file reference. Keep the bytes in Storage.
-- No domain tables, bucket policies, auth flow, or API endpoints are assumed in this bootstrap.
+- **Shares are the access unit, not albums.** Every thumbnail, download, and gallery
+  page is authorized against the share, its expiry, its photo subset, and its allowed
+  qualities.
+- **Thumbnails are cache, not data.** They live on disk, are safe to delete, and are
+  keyed by Drive file ID, width, and metadata mode. Postgres is the source of truth
+  for metadata.
+- **Originals are streamed.** Never persist them. Proxy from Drive on request.
+- **Photo rows are not deleted on re-index.** Missing files become `missing` and are
+  hidden from clients; favorites and history survive.
+- **Branding is data.** Organization and share rows own title, logo, and accent; no
+  static file is read at request time.
+
+## Auth and sessions
+
+- Organization users sign in with Better Auth (email + password). Sessions are
+  HttpOnly, Secure, SameSite=Lax cookies.
+- Clients never get an account. Public shares need no session; password shares get a
+  signed cookie after the password check; magic-link shares exchange a one-time token
+  for a client session row.
+- `/setup` is only available while no user exists, then redirects to `/login`.
+- Rate-limit login, share passwords, and magic-link exchange.
+
+## Files and storage
+
+- Postgres stores organizations, users, albums, photos, shares, sessions, favorites,
+  and analytics events. Generated SQL migrations are committed.
+- `THUMB_CACHE_DIR` holds `<drive-file-id>-<width>-<mode>.jpg`. The cache has a size
+  and file cap with LRU eviction and no backup.
+- `DATABASE_URL` points at the Compose Postgres directly. No transaction pooler; if one
+  is introduced later, migrations and `pg-boss` need their own direct connection.
 
 ## Growth path
 
-Add a feature only after defining its user behavior and data ownership. Keep its request/response contract independent of the database representation where practical. Add repository methods for domain operations, then choose the minimum schema and Storage policy needed for that feature. Background jobs or external ingestion should run as separate processes if their lifecycle, credentials, or retries differ from web requests.
+Add a feature only after its behavior and data ownership are defined in a spec. Keep
+request/response contracts independent of the schema where practical, add repository
+methods for domain operations, then the minimum schema and policy needed. Background
+work goes through `pg-boss`; split a separate worker process only when lifecycle,
+credentials, or retries diverge from web requests.
