@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: potokuadrat
+      POSTGRES_PASSWORD: potokuadrat
+      POSTGRES_DB: potokuadrat
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U potokuadrat -d potokuadrat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://potokuadrat:potokuadrat@postgres:5432/potokuadrat
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://potokuadrat:potokuadrat@postgres:5432/potokuadrat
+      GOOGLE_DRIVE_KEY_FILE: /app/secrets/service-account.json
+      THUMB_CACHE_DIR: /app/.cache/thumbs
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - thumbs:/app/.cache/thumbs
+      - ./secrets:/app/secrets:ro
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  thumbs:

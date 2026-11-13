@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.cache
+secrets
+.env*
+!.env.example
+*.log
+.DS_Store
