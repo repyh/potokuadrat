@@ -2,7 +2,7 @@
 
 ## Direction
 
-This project adopts the useful architectural ideas from `documents/web/lomba-mia`: a Next.js App Router application acting as a backend-for-frontend, feature-oriented UI code, explicit cross-layer contracts, and server-only use cases and repositories. The product domain, database schema, endpoints, and contracts remain specific to Potokuadrat and are intentionally undefined until its behavior is agreed.
+This project follows a small set of architectural conventions: a Next.js App Router application acting as a backend-for-frontend, feature-oriented UI code, explicit cross-layer contracts, and server-only use cases and repositories. The product domain, database schema, endpoints, and contracts remain specific to Potokuadrat and are intentionally undefined until its behavior is agreed.
 
 ## Request and data flow
 
