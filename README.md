@@ -69,6 +69,26 @@ forces a rebuild.
 | `npm run db:seed` | Create the sample organization, admin, album, and shares |
 | `npm run db:studio` | Inspect the database |
 
+## Share media API
+
+These routes are open to public shares. Password and magic-link shares return `403`/
+`404` until the access gate and client gallery arrive.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /s/:slug/thumb/:photoId?w=400\|800\|1600\|2048` | Cached thumbnail; `download=1` adds an attachment name |
+| `GET /s/:slug/download/:photoId?quality=original\|web` | Original proxy, or a 2048px JPEG from the cache |
+
+A photo is served only when it belongs to the share's album, is not tombstoned, and is
+inside the share's frozen subset if one exists. Thumbnails carry a stable `ETag` and
+`Cache-Control: immutable`; a matching `If-None-Match` returns `304`. The effective
+metadata policy is the share override with the organization fallback, and clean and
+raw entries never share a cache file.
+
+In development, the seeded album (`seed-photo-*`) serves generated SVG placeholders so
+the gallery runs without Google credentials. That path is disabled in production
+builds.
+
 ## Documentation
 
 - `docs/specs/` — product and PoC specifications
