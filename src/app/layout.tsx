@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import config from "../../config.json";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: `${config.eventName} — Event folio`,
-  description: config.description,
+  title: "Potokuadrat",
+  description:
+    "Self-hosted client gallery over Google Drive: albums, share links, favorites, and downloads.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -19,7 +19,8 @@ spec in `docs/specs/`.
    the path to a Google Drive service-account key.
 2. `npm install`
 3. `npm run db:migrate`
-4. `npm run dev` and open `http://localhost:3000`.
+4. `npm run dev` and open `http://localhost:3000`. The first visit redirects to
+   `/setup`, where you create the organization and the admin account.
 
 Share the photo folders with the service account email (Viewer). The key file stays
 outside git; `GOOGLE_DRIVE_KEY_FILE` only carries its path.
@@ -59,7 +60,8 @@ forces a rebuild.
 | `npm run build` / `npm start` | Production build and server |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript without emit |
-| `npm test` | Vitest |
+| `npm test` | Vitest unit tests |
+| `npm run test:integration` | Auth and setup tests against `TEST_DATABASE_URL` |
 | `npm run db:generate` | Generate SQL migrations from the Drizzle schema |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:studio` | Inspect the database |
@@ -75,6 +77,9 @@ forces a rebuild.
 
 - Never commit the service-account key or `.env.local`. The key grants read access to
   every folder shared with the service account.
+- `/setup` stays reachable until the first account exists. Finish setup right after
+  deploying, or keep the instance off the public network until it is done. Sign-up is
+  rejected once a user exists.
 - `STRIP_METADATA=0` serves Drive thumbnails untouched; that can include GPS and
   photographer identity. Keep the default unless a share explicitly needs it.
 - Original downloads are proxied from Drive and never rewritten.

@@ -19,3 +19,9 @@ function getPool(): Pool {
 export function getDb() {
   return drizzle(getPool(), { schema });
 }
+
+/** Closes the pool; for tests and one-off scripts only. */
+export async function closeDb(): Promise<void> {
+  await pool?.end();
+  pool = undefined;
+}
