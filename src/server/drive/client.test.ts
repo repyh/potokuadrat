@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { buildJpeg } from "@/test/jpeg";
 
-import { createDriveClient, thumbnailUrl, type DriveClientOptions } from "./client";
+import { createDriveClient, parseDriveFolderInput, thumbnailUrl, type DriveClientOptions } from "./client";
 
 const { privateKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -242,5 +242,77 @@ describe("thumbnailUrl", () => {
     expect(thumbnailUrl("https://lh3.example/a=w220-h220", 400)).toBe("https://lh3.example/a=s400");
     expect(thumbnailUrl("https://lh3.example/a=h220", 800)).toBe("https://lh3.example/a=s800");
     expect(thumbnailUrl("https://lh3.example/a", 2048)).toBe("https://lh3.example/a=s2048");
+  });
+});
+
+describe("parseDriveFolderInput", () => {
+  const id = "1XtiPMDZ5FWFJv8IqWNjnZDqwJD9LmURQ";
+
+  it("accepts a raw id", () => {
+    expect(parseDriveFolderInput(id)).toBe(id);
+    expect(parseDriveFolderInput(`  ${id}  `)).toBe(id);
+  });
+
+  it("accepts folder links, including multi-account paths and share parameters", () => {
+    expect(parseDriveFolderInput(`https://drive.google.com/drive/folders/${id}?usp=sharing`)).toBe(id);
+    expect(parseDriveFolderInput(`https://drive.google.com/drive/u/1/folders/${id}`)).toBe(id);
+    expect(parseDriveFolderInput(`https://drive.google.com/open?id=${id}`)).toBe(id);
+  });
+
+  it("rejects other hosts, other paths, and short ids", () => {
+    expect(parseDriveFolderInput(`https://example.com/drive/folders/${id}`)).toBeNull();
+    expect(parseDriveFolderInput("https://drive.google.com/drive/my-drive")).toBeNull();
+    expect(parseDriveFolderInput("short-id")).toBeNull();
+    expect(parseDriveFolderInput("")).toBeNull();
+  });
+});
+
+describe("folder discovery", () => {
+  it("lists shared folders with their owner", async () => {
+    const { client } = makeClient((url) => {
+      if (url.hostname === "oauth2.googleapis.com") {
+        return tokenResponse();
+      }
+      return json({
+        files: [
+          {
+            id: "folderA0001",
+            name: "Wedding 2026",
+            owners: [{ displayName: "Atelier Kusuma" }],
+          },
+        ],
+      });
+    });
+
+    const folders = await client.listSharedFolders();
+
+    expect(folders).toEqual([
+      {
+        id: "folderA0001",
+        name: "Wedding 2026",
+        source: "shared",
+        ownerName: "Atelier Kusuma",
+      },
+    ]);
+  });
+
+  it("lists shared drives", async () => {
+    const { client } = makeClient((url) => {
+      if (url.hostname === "oauth2.googleapis.com") {
+        return tokenResponse();
+      }
+      return json({ drives: [{ id: "driveA0001", name: "Studio Archive" }] });
+    });
+
+    const drives = await client.listSharedDrives();
+
+    expect(drives).toEqual([
+      {
+        id: "driveA0001",
+        name: "Studio Archive",
+        source: "shared_drive",
+        ownerName: null,
+      },
+    ]);
   });
 });

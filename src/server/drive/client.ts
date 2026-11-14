@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { DriveFolderOption } from "@/contracts/admin";
+
 import { createLimiter } from "./limiter";
 import { isImageFile } from "./mime";
 import { makeAssertion, TOKEN_URL, type ServiceAccount } from "./jwt";
@@ -18,6 +20,36 @@ export function isThumbWidth(value: number): value is ThumbWidth {
 
 export function isSafeDriveFileId(value: string): boolean {
   return FILE_ID_PATTERN.test(value);
+}
+
+/**
+ * Accepts a raw Drive id, a folder URL, or a URL with `?id=`. Anything else is null so
+ * the caller never forwards arbitrary input to Drive.
+ */
+export function parseDriveFolderInput(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (isSafeDriveFileId(trimmed)) {
+    return trimmed;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (url.hostname !== "drive.google.com") {
+    return null;
+  }
+
+  const fromPath = url.pathname.match(/\/folders\/([A-Za-z0-9_-]{10,})/)?.[1];
+  const id = fromPath ?? url.searchParams.get("id") ?? "";
+
+  return isSafeDriveFileId(id) ? id : null;
 }
 
 export interface DrivePhoto {
@@ -66,6 +98,8 @@ export interface ListImagesOptions {
 
 export interface DriveClient {
   getFolder(folderId: string): Promise<DriveFolder>;
+  listSharedFolders(): Promise<DriveFolderOption[]>;
+  listSharedDrives(): Promise<DriveFolderOption[]>;
   listImages(folderId: string, options?: ListImagesOptions): Promise<DrivePhoto[]>;
   getFile(fileId: string): Promise<DrivePhoto>;
   fetchThumbnail(
@@ -92,6 +126,22 @@ interface RawDriveFile {
 interface ListPage {
   nextPageToken?: string;
   files?: RawDriveFile[];
+}
+
+interface SharedFolderFile {
+  id?: string;
+  name?: string;
+  owners?: Array<{ displayName?: string }>;
+}
+
+interface SharedFolderPage {
+  nextPageToken?: string;
+  files?: SharedFolderFile[];
+}
+
+interface SharedDrivePage {
+  nextPageToken?: string;
+  drives?: Array<{ id?: string; name?: string }>;
 }
 
 const FILE_FIELDS =
@@ -257,6 +307,67 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
     return toPhoto(file);
   }
 
+  async function listSharedFolders(): Promise<DriveFolderOption[]> {
+    const folders: DriveFolderOption[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const page = await apiJson<SharedFolderPage>("files", {
+        q: "sharedWithMe = true and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        fields: "nextPageToken,files(id,name,owners(displayName))",
+        pageSize: "1000",
+        supportsAllDrives: "true",
+        includeItemsFromAllDrives: "true",
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      for (const file of page.files ?? []) {
+        if (!file.id || !file.name) {
+          continue;
+        }
+        folders.push({
+          id: file.id,
+          name: file.name,
+          source: "shared",
+          ownerName: file.owners?.[0]?.displayName ?? null,
+        });
+      }
+
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+
+    return folders;
+  }
+
+  async function listSharedDrives(): Promise<DriveFolderOption[]> {
+    const drives: DriveFolderOption[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const page = await apiJson<SharedDrivePage>("drives", {
+        pageSize: "100",
+        fields: "nextPageToken,drives(id,name)",
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      for (const drive of page.drives ?? []) {
+        if (!drive.id || !drive.name) {
+          continue;
+        }
+        drives.push({
+          id: drive.id,
+          name: drive.name,
+          source: "shared_drive",
+          ownerName: null,
+        });
+      }
+
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+
+    return drives;
+  }
+
   async function listImages(
     folderId: string,
     listOptions: ListImagesOptions = {},
@@ -366,5 +477,13 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
     });
   }
 
-  return { getFolder, listImages, getFile, fetchThumbnail, openOriginal };
+  return {
+    getFolder,
+    listSharedFolders,
+    listSharedDrives,
+    listImages,
+    getFile,
+    fetchThumbnail,
+    openOriginal,
+  };
 }

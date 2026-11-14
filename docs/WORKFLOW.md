@@ -71,9 +71,10 @@ npm run dev
 The seed (owned by backend) creates:
 
 - one organization and an admin with documented credentials;
-- one album with placeholder photos served locally, no Drive key required;
-- one public share, one password share, one magic-link share;
-- a few favorites and one expired share for the error state.
+- one album with 24 placeholder photo rows; thumbnails stay pending until the share
+  thumbnail route exists, so no Drive key is required;
+- one public share, one password share, one magic-link share, and one expired share;
+- a client session and a few favorites for the magic-link share.
 
 UI must not need Google credentials. If a state cannot be reached from the seed, that
 is a seed bug, not something to fake in a component.

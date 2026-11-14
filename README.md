@@ -19,8 +19,10 @@ spec in `docs/specs/`.
    the path to a Google Drive service-account key.
 2. `npm install`
 3. `npm run db:migrate`
-4. `npm run dev` and open `http://localhost:3000`. The first visit redirects to
-   `/setup`, where you create the organization and the admin account.
+4. `npm run db:seed` (optional) for a sample organization, admin, album, and shares
+5. `npm run dev` and open `http://localhost:3000`. The first visit redirects to
+   `/setup`, where you create the organization and the admin account. With the seed,
+   sign in as `admin@potokuadrat.local` / `potokuadrat-seed`.
 
 Share the photo folders with the service account email (Viewer). The key file stays
 outside git; `GOOGLE_DRIVE_KEY_FILE` only carries its path.
@@ -64,6 +66,7 @@ forces a rebuild.
 | `npm run test:integration` | Auth and setup tests against `TEST_DATABASE_URL` |
 | `npm run db:generate` | Generate SQL migrations from the Drizzle schema |
 | `npm run db:migrate` | Apply migrations |
+| `npm run db:seed` | Create the sample organization, admin, album, and shares |
 | `npm run db:studio` | Inspect the database |
 
 ## Documentation
@@ -73,6 +76,22 @@ forces a rebuild.
 - `docs/WORKFLOW.md` — backend/UI split, contracts, and review rules
 - `docs/ARCHITECTURE.md` — module ownership and request flow
 - `PRODUCT.md` / `DESIGN.md` — product scope and visual system
+
+## Admin API
+
+Every route requires an admin session cookie (sign in through `/login` or
+`/api/auth/sign-in/email`).
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/admin/drive/folders` | Shared folders and Shared Drives the service account can see |
+| `GET /api/admin/albums` | Albums owned by the signed-in admin |
+| `POST /api/admin/albums` | Create an album from `{ title, folders[] }` and queue indexing |
+| `GET /api/admin/albums/:id` | Album, folders, and indexing progress |
+| `POST /api/admin/albums/:id/reindex` | Queue a re-index (tombstones files that disappeared) |
+
+Indexing runs through `pg-boss` in the app process. A re-index never downloads files;
+it only reads folder metadata and clears or sets the `missing_at` tombstone.
 
 ## Security notes
 

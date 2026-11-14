@@ -35,19 +35,3 @@ export function resolveStripMetadata(
 ): boolean {
   return share.stripMetadata ?? organizationStripMetadata;
 }
-
-export type PhotoOrientation = "landscape" | "portrait" | "unknown";
-
-/**
- * Square photos count as landscape, matching the gallery filters. Missing dimensions
- * stay unknown instead of being silently forced into a filter.
- */
-export function orientationFor(
-  width: number | null | undefined,
-  height: number | null | undefined,
-): PhotoOrientation {
-  if (!width || !height) {
-    return "unknown";
-  }
-  return width >= height ? "landscape" : "portrait";
-}
