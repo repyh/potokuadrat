@@ -70,6 +70,7 @@ forces a rebuild.
 
 - `docs/specs/` — product and PoC specifications
 - `docs/adr/` — decisions that changed the original plan
+- `docs/WORKFLOW.md` — backend/UI split, contracts, and review rules
 - `docs/ARCHITECTURE.md` — module ownership and request flow
 - `PRODUCT.md` / `DESIGN.md` — product scope and visual system
 

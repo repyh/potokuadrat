@@ -51,9 +51,14 @@ application, which fetches from Drive and writes the stripped thumbnail to the c
 | `src/server/drive/**` | Drive auth, listing, thumbnail fetch, cache, segment stripping |
 | `src/server/jobs/**` | pg-boss registration and job handlers |
 | `src/server/db/**` | Drizzle connection, schema, migrations access |
-| `src/contracts/**` | Types shared across the browser/server boundary |
+| `src/contracts/**` | Types and schemas shared across the browser/server boundary |
 | `src/components/ui/**` | Generic design-system primitives |
 | `drizzle/**` | Generated database migrations |
+
+How the backend and UI workstreams split this repository, run contracts first, and
+review across the boundary is in `docs/WORKFLOW.md`. ESLint enforces the import
+boundary: UI modules cannot import `src/server/**`, and contracts cannot import
+server, UI, or framework code.
 
 Allowed flow:
 
