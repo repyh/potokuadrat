@@ -31,11 +31,24 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
       status: "ready" as const,
     })),
     getAlbumFolders: vi.fn(async () => [
-      { id: "folder-1", driveFolderId: "drive-folder-1", name: "A", recursive: true },
-      { id: "folder-2", driveFolderId: "drive-folder-2", name: "B", recursive: false },
+      {
+        id: "folder-1",
+        driveFolderId: "drive-folder-1",
+        name: "A",
+        recursive: true,
+        lastIndexedAt: null,
+      },
+      {
+        id: "folder-2",
+        driveFolderId: "drive-folder-2",
+        name: "B",
+        recursive: false,
+        lastIndexedAt: null,
+      },
     ]),
     getAlbumDetail: vi.fn(),
     setStatus: vi.fn(async () => {}),
+    markFoldersIndexed: vi.fn(async () => {}),
     upsertPhotos: vi.fn(async () => {}),
     markMissingPhotos: vi.fn(async () => 1),
     countProgress: vi.fn(async () => ({
@@ -63,8 +76,14 @@ describe("indexAlbum", () => {
 
     const progress = await indexAlbum("album-1", { repository: repo, drive });
 
-    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-1", { recursive: true });
-    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-2", { recursive: false });
+    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-1", {
+      recursive: true,
+      modifiedAfter: null,
+    });
+    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-2", {
+      recursive: false,
+      modifiedAfter: null,
+    });
 
     const rows = vi.mocked(repo.upsertPhotos).mock.calls[0][1];
     expect(rows.map((row) => row.name)).toEqual(["SUB1.jpg", "TOP2.jpg", "TOP10.jpg"]);
@@ -77,11 +96,82 @@ describe("indexAlbum", () => {
       "file-top2",
       "file-top10",
     ]);
+    expect(repo.markFoldersIndexed).toHaveBeenCalledWith(
+      ["folder-1", "folder-2"],
+      expect.any(Date),
+    );
     expect(vi.mocked(repo.setStatus).mock.calls).toEqual([
       ["album-1", "indexing"],
       ["album-1", "ready"],
     ]);
     expect(progress).toMatchObject({ total: 3, pending: 3 });
+  });
+
+  it("requests only modified files and keeps tombstones in incremental mode", async () => {
+    const lastIndexedAt = new Date("2026-11-10T10:00:00Z");
+    const repo = repository({
+      getAlbumFolders: vi.fn(async () => [
+        {
+          id: "folder-1",
+          driveFolderId: "drive-folder-1",
+          name: "A",
+          recursive: true,
+          lastIndexedAt,
+        },
+        {
+          id: "folder-2",
+          driveFolderId: "drive-folder-2",
+          name: "B",
+          recursive: false,
+          lastIndexedAt,
+        },
+      ]),
+    });
+    const drive = {
+      listImages: vi.fn(async () => [photo({ id: "file-new", name: "NEW.jpg" })]),
+    };
+
+    await indexAlbum("album-1", { repository: repo, drive }, { mode: "incremental" });
+
+    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-1", {
+      recursive: true,
+      modifiedAfter: lastIndexedAt,
+    });
+    expect(repo.markMissingPhotos).not.toHaveBeenCalled();
+    expect(repo.markFoldersIndexed).toHaveBeenCalledWith(
+      ["folder-1", "folder-2"],
+      expect.any(Date),
+    );
+  });
+
+  it("falls back to a full listing when a folder was never indexed", async () => {
+    const repo = repository({
+      getAlbumFolders: vi.fn(async () => [
+        {
+          id: "folder-1",
+          driveFolderId: "drive-folder-1",
+          name: "A",
+          recursive: true,
+          lastIndexedAt: new Date("2026-11-10T10:00:00Z"),
+        },
+        {
+          id: "folder-2",
+          driveFolderId: "drive-folder-2",
+          name: "B",
+          recursive: false,
+          lastIndexedAt: null,
+        },
+      ]),
+    });
+    const drive = { listImages: vi.fn(async () => []) };
+
+    await indexAlbum("album-1", { repository: repo, drive }, { mode: "incremental" });
+
+    expect(drive.listImages).toHaveBeenCalledWith("drive-folder-1", {
+      recursive: true,
+      modifiedAfter: null,
+    });
+    expect(repo.markMissingPhotos).toHaveBeenCalledWith("album-1", []);
   });
 
   it("marks the album failed and rethrows when Drive fails", async () => {

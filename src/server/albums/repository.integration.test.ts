@@ -42,6 +42,7 @@ describe.skipIf(!databaseUrl)("album repository", () => {
       { driveFolderId: "drive-folder-1", name: "Main folder", recursive: true },
     ]);
     expect(folders).toHaveLength(1);
+    expect(folders[0].lastIndexedAt).toBeNull();
 
     const album = await repository.createAlbum({
       ownerUserId: "user-1",
@@ -86,6 +87,11 @@ describe.skipIf(!databaseUrl)("album repository", () => {
     const detail = await repository.getAlbumDetail(album.id);
     expect(detail?.folders).toHaveLength(1);
     expect(detail?.progress.total).toBe(2);
+
+    const indexedAt = new Date("2026-11-15T10:00:00Z");
+    await repository.markFoldersIndexed([folders[0].id], indexedAt);
+    const refreshed = await repository.getAlbumFolders(album.id);
+    expect(refreshed[0].lastIndexedAt?.toISOString()).toBe(indexedAt.toISOString());
 
     expect(await repository.markMissingPhotos(album.id, ["drive-photo-1"])).toBe(1);
     progress = await repository.countProgress(album.id);

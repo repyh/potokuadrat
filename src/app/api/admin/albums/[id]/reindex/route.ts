@@ -2,7 +2,7 @@ import { getAdminSession, jsonError } from "@/server/auth/api";
 import { getAlbumService } from "@/server/albums/runtime";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const session = await getAdminSession();
@@ -11,7 +11,12 @@ export async function POST(
   }
 
   const { id } = await params;
-  const queued = await getAlbumService().reindex(id);
+  const mode = new URL(request.url).searchParams.get("mode") ?? "full";
+  if (mode !== "full" && mode !== "incremental") {
+    return jsonError(400, "Unsupported re-index mode.");
+  }
+
+  const queued = await getAlbumService().reindex(id, mode);
 
   if (!queued) {
     return jsonError(404, "Album not found.");

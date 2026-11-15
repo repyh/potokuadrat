@@ -21,7 +21,7 @@ export function getAlbumService(): AlbumService {
   service ??= createAlbumService({
     repository: getAlbumRepository(),
     drive: () => getDriveRuntime().client,
-    enqueueIndex: (albumId) => enqueueIndexAlbum(albumId),
+    enqueueIndex: (albumId, options) => enqueueIndexAlbum(albumId, options),
   });
   return service;
 }

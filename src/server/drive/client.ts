@@ -94,6 +94,8 @@ export interface DriveClientOptions {
 export interface ListImagesOptions {
   recursive?: boolean;
   maxDepth?: number;
+  /** Only files modified after this instant, for incremental runs. */
+  modifiedAfter?: Date | string | null;
 }
 
 export interface DriveClient {
@@ -201,6 +203,18 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
     return accountPromise;
   }
 
+  async function isRateLimitResponse(response: Response): Promise<boolean> {
+    if (response.status !== 403) {
+      return false;
+    }
+    // Google reports most rate limits as 403 with a reason in the body.
+    const body = await response
+      .clone()
+      .text()
+      .catch(() => "");
+    return /rateLimitExceeded|userRateLimitExceeded|quotaExceeded|dailyLimitExceeded/i.test(body);
+  }
+
   async function requestWithRetry(url: string, init: RequestInit): Promise<Response> {
     let attempt = 0;
 
@@ -217,7 +231,8 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
         continue;
       }
 
-      if (!RETRYABLE_STATUS.has(response.status) || attempt + 1 >= retryAttempts) {
+      const retryable = RETRYABLE_STATUS.has(response.status) || (await isRateLimitResponse(response));
+      if (!retryable || attempt + 1 >= retryAttempts) {
         return response;
       }
 
@@ -383,9 +398,15 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
       const folder = queue.shift() as { id: string; depth: number };
       let pageToken: string | undefined;
 
+      const modifiedAfter = listOptions.modifiedAfter
+        ? new Date(listOptions.modifiedAfter).toISOString()
+        : null;
+
       do {
         const page = await apiJson<ListPage>("files", {
-          q: `'${folder.id}' in parents and trashed = false`,
+          q: modifiedAfter
+            ? `'${folder.id}' in parents and trashed = false and modifiedTime > '${modifiedAfter}'`
+            : `'${folder.id}' in parents and trashed = false`,
           fields: `nextPageToken,files(${FILE_FIELDS})`,
           pageSize: "1000",
           supportsAllDrives: "true",
