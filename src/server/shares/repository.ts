@@ -331,6 +331,7 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
             eq(shareRecipients.shareId, shareId),
             eq(shareRecipients.tokenHash, tokenHash),
             isNull(shareRecipients.usedAt),
+            sql`(${shareRecipients.expiresAt} is null or ${shareRecipients.expiresAt} > now())`,
           ),
         )
         .returning({ id: shareRecipients.id, email: shareRecipients.email });

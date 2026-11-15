@@ -73,6 +73,8 @@ export const shareRecipients = pgTable(
       .references(() => shares.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
     tokenHash: text("token_hash").notNull(),
+    // null keeps the development seed link usable; issued links get a short expiry.
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     usedAt: timestamp("used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

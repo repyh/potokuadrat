@@ -292,6 +292,15 @@ describe.skipIf(!databaseUrl)("share repository", () => {
     await repository.removeFavorite(session.id, PHOTO_2);
   });
 
+  it("refuses an expired magic-link token", async () => {
+    await db.execute(sql`
+      INSERT INTO share_recipients (share_id, email, token_hash, expires_at)
+      VALUES (${SHARE_WHOLE}, 'late@example.com', 'expired-token-hash', now() - interval '1 minute')
+    `);
+
+    expect(await repository.consumeRecipient(SHARE_WHOLE, "expired-token-hash")).toBeNull();
+  });
+
   it("does not return an expired client session", async () => {
     await db.execute(sql`
       INSERT INTO client_sessions (id, share_id, email, expires_at)

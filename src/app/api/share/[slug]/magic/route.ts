@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { z } from "zod";
 
 import { isShareActive } from "@/server/shares/policy";
@@ -9,6 +7,7 @@ import {
   shareCookieName,
 } from "@/server/shares/cookie";
 import { clientKey, magicAttemptLimiter } from "@/server/shares/rate-limit";
+import { hashMagicToken } from "@/server/shares/token";
 import { getShareRepository } from "@/server/shares/runtime";
 
 const SESSION_DAYS = 7;
@@ -51,7 +50,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
     );
   }
 
-  const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
+  const tokenHash = hashMagicToken(parsed.data.token);
   const recipient = await repository.consumeRecipient(share.id, tokenHash);
   if (!recipient) {
     return Response.json({ error: "This link is invalid or already used." }, { status: 401 });
