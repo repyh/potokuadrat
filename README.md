@@ -139,6 +139,18 @@ Every route requires an admin session cookie (sign in through `/login` or
 | `GET /api/admin/albums/:id` | Album, folders, and indexing progress |
 | `POST /api/admin/albums/:id/reindex` | Queue a re-index; `?mode=incremental` only fetches modified files |
 
+Album lifecycle changes are admin Server Actions in `src/app/admin/albums/actions.ts`,
+all returning `ActionResult<T>`: `updateAlbumAction`, `deleteAlbumAction`, and
+`setAlbumCoverAction`.
+
+- `updateAlbumAction` edits the title, the branding override, and the folder set.
+  Replacing folders queues a full re-index, and photos from removed folders become
+  tombstones.
+- `setAlbumCoverAction` accepts a photo of the album or `null`; tombstoned photos and
+  photos from another album are rejected.
+- `deleteAlbumAction` cascades photos, folder links, shares, client sessions, and
+  favorites.
+
 Indexing runs through `pg-boss` in the app process. A full re-index re-lists every
 folder and sets `missing_at` on files that disappeared. `mode=incremental` requests
 only files modified since each folder's last successful listing, keeps existing
