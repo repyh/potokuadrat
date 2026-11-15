@@ -138,6 +138,99 @@ describe.skipIf(!databaseUrl)("share repository", () => {
     expect(await repository.findClientSession("20000000-0000-4000-8000-000000000099", session.id)).toBeNull();
   });
 
+
+  it("pages the gallery and hides tombstoned and foreign photos", async () => {
+    const share = await repository.findBySlug("whole");
+
+    const first = await repository.listSharePhotos(share!, {
+      filter: "all",
+      clientSessionId: null,
+      cursor: null,
+      limit: 1,
+    });
+
+    expect(first.total).toBe(2);
+    expect(first.hasMore).toBe(true);
+    expect(first.rows.map((row) => row.name)).toEqual(["TOP2.jpg"]);
+
+    const second = await repository.listSharePhotos(share!, {
+      filter: "all",
+      clientSessionId: null,
+      cursor: { sortIndex: first.rows[0].sortIndex, id: first.rows[0].id },
+      limit: 50,
+    });
+
+    expect(second.rows.map((row) => row.name)).toEqual(["TOP10.jpg"]);
+    expect(second.hasMore).toBe(false);
+    expect(second.rows.map((row) => row.id)).not.toContain(PHOTO_MISSING);
+    expect(second.rows.map((row) => row.id)).not.toContain(PHOTO_OTHER);
+  });
+
+  it("applies orientation filters and the frozen subset", async () => {
+    const whole = await repository.findBySlug("whole");
+    const subset = await repository.findBySlug("subset");
+    const options = { clientSessionId: null, cursor: null, limit: 50 };
+
+    const landscape = await repository.listSharePhotos(whole!, {
+      ...options,
+      filter: "landscape",
+    });
+    const portrait = await repository.listSharePhotos(whole!, { ...options, filter: "portrait" });
+    const frozen = await repository.listSharePhotos(subset!, { ...options, filter: "all" });
+
+    expect(landscape.rows.map((row) => row.name)).toEqual(["TOP2.jpg"]);
+    expect(portrait.rows.map((row) => row.name)).toEqual(["TOP10.jpg"]);
+    expect(frozen.rows.map((row) => row.name)).toEqual(["TOP2.jpg"]);
+    expect(frozen.total).toBe(1);
+  });
+
+  it("stores favorites per session and filters the gallery", async () => {
+    const share = await repository.findBySlug("whole");
+    const session = await repository.findOrCreateClientSession(
+      SHARE_WHOLE,
+      "favorites@example.com",
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+
+    expect(await repository.addFavorite(share!, session.id, PHOTO_1)).toBe(true);
+    expect(await repository.addFavorite(share!, session.id, PHOTO_OTHER)).toBe(false);
+    expect(await repository.listFavoritePhotoIds(share!, session.id)).toEqual([PHOTO_1]);
+
+    const page = await repository.listSharePhotos(share!, {
+      filter: "favorites",
+      clientSessionId: session.id,
+      cursor: null,
+      limit: 50,
+    });
+
+    expect(page.total).toBe(1);
+    expect(page.rows.map((row) => row.name)).toEqual(["TOP2.jpg"]);
+
+    await repository.removeFavorite(session.id, PHOTO_1);
+    expect(await repository.listFavoritePhotoIds(share!, session.id)).toEqual([]);
+  });
+
+  it("reuses a live session for the same share and email", async () => {
+    const first = await repository.findOrCreateClientSession(
+      SHARE_WHOLE,
+      "returning@example.com",
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+    const second = await repository.findOrCreateClientSession(
+      SHARE_WHOLE,
+      "returning@example.com",
+      new Date(Date.now() + 2 * 60 * 60 * 1000),
+    );
+    const elsewhere = await repository.findOrCreateClientSession(
+      SHARE_SUBSET,
+      "returning@example.com",
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+
+    expect(second.id).toBe(first.id);
+    expect(elsewhere.id).not.toBe(first.id);
+  });
+
   it("does not return an expired client session", async () => {
     await db.execute(sql`
       INSERT INTO client_sessions (id, share_id, email, expires_at)

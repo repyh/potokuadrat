@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveShareAccess, statusForAccess } from "./access";
+import { accessErrorMessage, resolveShareAccess, statusForAccess } from "./access";
 import type { SharePhotoRecord, ShareRecord, ShareRepository } from "./repository";
 
 export interface ShareMediaOptions {
@@ -28,18 +28,7 @@ export async function resolveShareMedia(
   const access = resolveShareAccess(share, new Date(), authorized);
 
   if (access !== "ok") {
-    return {
-      ok: false,
-      status: statusForAccess(access),
-      error:
-        access === "expired"
-          ? "Share expired."
-          : access === "password_required"
-            ? "Share requires a password."
-            : access === "magic_link_required"
-              ? "Share requires a magic link."
-              : "Share unavailable.",
-    };
+    return { ok: false, status: statusForAccess(access), error: accessErrorMessage(access) };
   }
 
   const photo = await repository.getSharePhoto(share, photoId);

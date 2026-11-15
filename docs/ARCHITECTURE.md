@@ -82,6 +82,9 @@ TypeScript types do not validate input. Mark server-only modules with `server-on
 - **Originals are streamed.** Never persist them. Proxy from Drive on request.
 - **Photo rows are not deleted on re-index.** Missing files become `missing` and are
   hidden from clients; favorites and history survive.
+- **Favorites have one owner per mode.** Magic-link sessions persist them in Postgres,
+  keyed by the client session, and a returning email reuses its live session so the list
+  survives a new link. Public and password shares keep favorites in the browser.
 - **Branding is data.** Organization and share rows own title, logo, and accent; no
   static file is read at request time.
 

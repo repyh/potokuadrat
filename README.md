@@ -76,6 +76,10 @@ forces a rebuild.
 | `GET /api/share/:slug` | `GalleryState`: access, album, and policy (no-store) |
 | `POST /api/share/:slug/access` | Exchange a share password for a signed cookie |
 | `POST /api/share/:slug/magic` | Exchange a one-time magic-link token for a client session |
+| `GET /api/share/:slug/photos?filter=&cursor=&limit=` | `PhotoPage`; filter `all`, `favorites`, `landscape`, or `portrait` |
+| `GET /api/share/:slug/favorites` | Server-side favorite photo ids of the magic-link session |
+| `PUT /api/share/:slug/favorites/:photoId` | Favorite a photo; returns the updated id list |
+| `DELETE /api/share/:slug/favorites/:photoId` | Remove a favorite; returns the updated id list |
 | `GET /s/:slug/thumb/:photoId?w=400\|800\|1600\|2048` | Cached thumbnail; `download=1` adds an attachment name |
 | `GET /s/:slug/download/:photoId?quality=original\|web` | Original proxy, or a 2048px JPEG from the cache |
 
@@ -84,6 +88,17 @@ inside the share's frozen subset if one exists. Thumbnails carry a stable `ETag`
 `Cache-Control: immutable`; a matching `If-None-Match` returns `304`. The effective
 metadata policy is the share override with the organization fallback, and clean and
 raw entries never share a cache file.
+
+The photo list orders by `sort_index`, uses an opaque cursor (`nextCursor`), and defaults
+to 50 photos with a maximum of 200. Filters never widen the share: tombstoned photos,
+other albums, and photos outside a frozen subset stay hidden. The `total` field counts
+every photo matching the filter.
+
+Favorites are stored server-side only for magic-link sessions (`favorites` table, keyed by
+the client session). Exchanging a new magic link for the same email reuses the live
+session, so favorites survive re-authentication. Public and password shares keep
+favorites in the browser; their favorites endpoints answer `400`, and `filter=favorites`
+is refused the same way. An unknown or out-of-share photo returns `404`.
 
 Password and magic-link shares are protected by an HttpOnly, SameSite=Lax cookie signed
 with `BETTER_AUTH_SECRET`; the password cookie lasts 12 hours, a magic-link session 7

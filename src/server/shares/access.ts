@@ -28,6 +28,20 @@ export function resolveShareAccess(
   return share.mode === "password" ? "password_required" : "magic_link_required";
 }
 
+/** One message per access state so every route answers the same way. */
+export function accessErrorMessage(access: Exclude<ShareAccess, "ok">): string {
+  switch (access) {
+    case "expired":
+      return "Share expired.";
+    case "password_required":
+      return "Share requires a password.";
+    case "magic_link_required":
+      return "Share requires a magic link.";
+    default:
+      return "Share unavailable.";
+  }
+}
+
 export function statusForAccess(access: Exclude<ShareAccess, "ok">): number {
   switch (access) {
     case "expired":

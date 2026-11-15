@@ -35,13 +35,22 @@ function repository(overrides: Partial<ShareRepository> = {}): ShareRepository {
   return {
     findBySlug: vi.fn(async () => share),
     getSharePhoto: vi.fn(async () => photo),
+    listSharePhotos: vi.fn(async () => ({ rows: [], total: 0, hasMore: false })),
     consumeRecipient: vi.fn(async () => null),
     createClientSession: vi.fn(async () => ({
       id: "session-1",
       email: "guest@example.com",
       expiresAt: new Date(),
     })),
+    findOrCreateClientSession: vi.fn(async () => ({
+      id: "session-1",
+      email: "guest@example.com",
+      expiresAt: new Date(),
+    })),
     findClientSession: vi.fn(async () => null),
+    listFavoritePhotoIds: vi.fn(async () => []),
+    addFavorite: vi.fn(async () => true),
+    removeFavorite: vi.fn(async () => {}),
     ...overrides,
   };
 }

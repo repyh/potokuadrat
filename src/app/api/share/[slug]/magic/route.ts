@@ -58,7 +58,12 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   }
 
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  const session = await repository.createClientSession(share.id, recipient.email, expiresAt);
+  // A returning recipient keeps the same session row, and with it their favorites.
+  const session = await repository.findOrCreateClientSession(
+    share.id,
+    recipient.email,
+    expiresAt,
+  );
   const cookie = createShareCookieValue(share.id, {
     sessionId: session.id,
     maxAgeSeconds: SESSION_DAYS * 24 * 60 * 60,
