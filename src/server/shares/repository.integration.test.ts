@@ -231,6 +231,67 @@ describe.skipIf(!databaseUrl)("share repository", () => {
     expect(elsewhere.id).not.toBe(first.id);
   });
 
+
+  it("lists archive photos in gallery order and respects the subset", async () => {
+    const whole = await repository.findBySlug("whole");
+    const subset = await repository.findBySlug("subset");
+
+    const all = await repository.listShareArchivePhotos(whole!, {
+      clientSessionId: null,
+      photoIds: null,
+      favoritesOnly: false,
+    });
+    const frozen = await repository.listShareArchivePhotos(subset!, {
+      clientSessionId: null,
+      photoIds: null,
+      favoritesOnly: false,
+    });
+
+    expect(all.map((row) => row.name)).toEqual(["TOP2.jpg", "TOP10.jpg"]);
+    expect(all.map((row) => row.driveFileId)).toEqual(["drive-1", "drive-2"]);
+    expect(frozen.map((row) => row.name)).toEqual(["TOP2.jpg"]);
+    expect(all.map((row) => row.id)).not.toContain(PHOTO_MISSING);
+    expect(all.map((row) => row.id)).not.toContain(PHOTO_OTHER);
+  });
+
+  it("restricts an explicit archive selection to the share", async () => {
+    const whole = await repository.findBySlug("whole");
+
+    const photos = await repository.listShareArchivePhotos(whole!, {
+      clientSessionId: null,
+      photoIds: [PHOTO_1, PHOTO_OTHER],
+      favoritesOnly: false,
+    });
+
+    expect(photos.map((row) => row.id)).toEqual([PHOTO_1]);
+  });
+
+  it("selects only the session's favorites for a favorites archive", async () => {
+    const whole = await repository.findBySlug("whole");
+    const session = await repository.findOrCreateClientSession(
+      SHARE_WHOLE,
+      "archive@example.com",
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+    await repository.addFavorite(whole!, session.id, PHOTO_2);
+
+    const favorites = await repository.listShareArchivePhotos(whole!, {
+      clientSessionId: session.id,
+      photoIds: null,
+      favoritesOnly: true,
+    });
+    const everything = await repository.listShareArchivePhotos(whole!, {
+      clientSessionId: session.id,
+      photoIds: null,
+      favoritesOnly: false,
+    });
+
+    expect(favorites.map((row) => row.id)).toEqual([PHOTO_2]);
+    expect(everything).toHaveLength(2);
+
+    await repository.removeFavorite(session.id, PHOTO_2);
+  });
+
   it("does not return an expired client session", async () => {
     await db.execute(sql`
       INSERT INTO client_sessions (id, share_id, email, expires_at)

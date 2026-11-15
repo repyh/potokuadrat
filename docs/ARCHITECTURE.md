@@ -79,7 +79,8 @@ TypeScript types do not validate input. Mark server-only modules with `server-on
 - **Thumbnails are cache, not data.** They live on disk, are safe to delete, and are
   keyed by Drive file ID, width, and metadata mode. Postgres is the source of truth
   for metadata.
-- **Originals are streamed.** Never persist them. Proxy from Drive on request.
+- **Originals are streamed.** Never persist them. Proxy from Drive on request, and build
+  multi-photo zips in memory through `yazl` without a temporary archive.
 - **Photo rows are not deleted on re-index.** Missing files become `missing` and are
   hidden from clients; favorites and history survive.
 - **Favorites have one owner per mode.** Magic-link sessions persist them in Postgres,
