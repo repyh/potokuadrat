@@ -49,3 +49,45 @@ export interface AlbumDetailResponse {
 export interface AlbumListResponse {
   albums: AlbumSummary[];
 }
+
+/**
+ * Settings for the single organization of an installation. Branding values are the
+ * defaults every share inherits; a share may override them.
+ */
+export interface OrganizationSettings {
+  name: string;
+  title: string | null;
+  logo: string | null;
+  accent: string | null;
+  footerEnabled: boolean;
+  /** Default metadata policy; a share may override it. */
+  stripMetadata: boolean;
+  /** ISO 8601. */
+  updatedAt: string;
+}
+
+export interface OrganizationSettingsInput {
+  name: string;
+  title?: string | null;
+  logo?: string | null;
+  accent?: string | null;
+  footerEnabled?: boolean;
+  stripMetadata?: boolean;
+}
+
+export interface OrganizationSettingsResponse {
+  settings: OrganizationSettings;
+}
+
+export const DRIVE_STATUS_STATES = ["not_configured", "reachable", "failing"] as const;
+export type DriveStatusState = (typeof DRIVE_STATUS_STATES)[number];
+
+/** Health of the service-account connection, without any credential material. */
+export interface DriveStatus {
+  state: DriveStatusState;
+  message: string;
+  /** Folders and Shared Drives visible to the account, when the check succeeded. */
+  folderCount: number | null;
+  /** ISO 8601. */
+  checkedAt: string;
+}
