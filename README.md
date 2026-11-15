@@ -145,6 +145,23 @@ only files modified since each folder's last successful listing, keeps existing
 tombstones, and falls back to a full run until every folder has a timestamp. Drive
 `403` rate-limit responses are retried with the same backoff as `429`/`5xx`.
 
+## Share management
+
+Share changes are admin Server Actions in `src/app/admin/shares/actions.ts`, all
+returning `ActionResult<T>` from `src/contracts/actions.ts`: list, create, update,
+delete, replace the photo subset, add/remove a recipient, and reissue a magic link.
+Their shapes live in `src/contracts/share.ts`.
+
+- Slugs are random and unguessable, and a deleted slug is never reused.
+- Password shares store a Better Auth hash; switching a share to `password` mode
+  requires a password.
+- `photoIds: null` keeps the whole album and follows re-indexing. An array freezes the
+  subset, and every id must belong to the album.
+- Magic links are single use. Only the SHA-256 hash is stored; issuance returns a
+  copyable `${APP_URL}/s/:slug?token=...` URL that expires after 7 days.
+- Deleting a share cascades its recipients, frozen subset, client sessions, and
+  favorites.
+
 ## Security notes
 
 - Never commit the service-account key or `.env.local`. The key grants read access to

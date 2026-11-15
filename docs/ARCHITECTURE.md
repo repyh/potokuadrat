@@ -95,7 +95,8 @@ TypeScript types do not validate input. Mark server-only modules with `server-on
   HttpOnly, Secure, SameSite=Lax cookies.
 - Clients never get an account. Public shares need no session; password shares get a
   signed cookie after the password check; magic-link shares exchange a one-time token
-  for a client session row.
+  for a client session row. Admins issue those links from Server Actions, which store
+  only a hash with a short expiry.
 - `/setup` is only available while no user exists, then redirects to `/login`.
 - Rate-limit login, share passwords, and magic-link exchange.
 

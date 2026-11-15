@@ -15,6 +15,13 @@
       "when": 1794732454614,
       "tag": "0001_drive_folder_last_indexed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794739186556,
+      "tag": "0002_share_recipient_expires_at",
+      "breakpoints": true
     }
   ]
 }
