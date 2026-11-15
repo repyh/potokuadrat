@@ -80,6 +80,7 @@ forces a rebuild.
 | `GET /api/share/:slug/favorites` | Server-side favorite photo ids of the magic-link session |
 | `PUT /api/share/:slug/favorites/:photoId` | Favorite a photo; returns the updated id list |
 | `DELETE /api/share/:slug/favorites/:photoId` | Remove a favorite; returns the updated id list |
+| `GET /api/share/:slug/download.zip?quality=&scope=&ids=` | Streamed zip; quality `original`/`web`, scope `all`/`favorites` |
 | `GET /s/:slug/thumb/:photoId?w=400\|800\|1600\|2048` | Cached thumbnail; `download=1` adds an attachment name |
 | `GET /s/:slug/download/:photoId?quality=original\|web` | Original proxy, or a 2048px JPEG from the cache |
 
@@ -99,6 +100,13 @@ the client session). Exchanging a new magic link for the same email reuses the l
 session, so favorites survive re-authentication. Public and password shares keep
 favorites in the browser; their favorites endpoints answer `400`, and `filter=favorites`
 is refused the same way. An unknown or out-of-share photo returns `404`.
+
+Archives stream entries straight from Drive (originals) or the 2048 cache (`quality=web`)
+through `yazl`; nothing is written to disk and only one Drive file is read at a time.
+`scope=favorites` uses the magic-link session, while public and password clients pass the
+ids they favorited locally via `ids` (comma separated, restricted to the share). Names in
+the zip are flattened and deduplicated. A selection above 500 photos or 2 GB returns
+`413` and asks for per-file downloads; an empty selection returns `404`.
 
 Password and magic-link shares are protected by an HttpOnly, SameSite=Lax cookie signed
 with `BETTER_AUTH_SECRET`; the password cookie lasts 12 hours, a magic-link session 7

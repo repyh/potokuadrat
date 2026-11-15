@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { PhotoFilter, ThumbStatus } from "@/contracts/album";
@@ -70,6 +70,14 @@ export interface SharePhotoListOptions {
   limit: number;
 }
 
+export interface ShareArchiveOptions {
+  /** Favorites of this client session, when the download scope is `favorites`. */
+  clientSessionId: string | null;
+  /** Explicit photo ids, already validated as UUIDs and restricted to the share. */
+  photoIds: string[] | null;
+  favoritesOnly: boolean;
+}
+
 export interface SharePhotoListResult {
   rows: SharePhotoRow[];
   total: number;
@@ -97,6 +105,11 @@ export interface ShareRepository {
     share: ShareRecord,
     options: SharePhotoListOptions,
   ): Promise<SharePhotoListResult>;
+  /** Every photo an archive may include, ordered by `sort_index`. */
+  listShareArchivePhotos(
+    share: ShareRecord,
+    options: ShareArchiveOptions,
+  ): Promise<SharePhotoRecord[]>;
   /** Atomically marks a magic-link token as used. */
   consumeRecipient(shareId: string, tokenHash: string): Promise<RecipientRecord | null>;
   createClientSession(
@@ -272,6 +285,41 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
         total: counted?.total ?? 0,
         hasMore: rows.length > options.limit,
       };
+    },
+
+    async listShareArchivePhotos(share, options) {
+      const conditions = [visiblePhotos(share)];
+
+      if (options.favoritesOnly && options.clientSessionId) {
+        conditions.push(
+          sql`exists (
+            select 1 from favorites f
+            where f.client_session_id = ${options.clientSessionId}::uuid
+              and f.photo_id = ${photos.id}
+          )`,
+        );
+      }
+
+      if (options.photoIds) {
+        if (options.photoIds.length === 0) {
+          return [];
+        }
+        conditions.push(inArray(photos.id, options.photoIds));
+      }
+
+      return db
+        .select({
+          id: photos.id,
+          driveFileId: photos.driveFileId,
+          name: photos.name,
+          width: photos.width,
+          height: photos.height,
+          mimeType: photos.mimeType,
+          bytes: photos.bytes,
+        })
+        .from(photos)
+        .where(and(...conditions))
+        .orderBy(asc(photos.sortIndex), asc(photos.id));
     },
 
     async consumeRecipient(shareId, tokenHash) {

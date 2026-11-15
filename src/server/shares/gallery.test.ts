@@ -46,6 +46,7 @@ function repository(overrides: Partial<ShareRepository> = {}): ShareRepository {
     findBySlug: vi.fn(async () => share),
     getSharePhoto: vi.fn(async () => null),
     listSharePhotos: vi.fn(async () => ({ rows: [row], total: 1, hasMore: false })),
+    listShareArchivePhotos: vi.fn(async () => []),
     consumeRecipient: vi.fn(async () => null),
     createClientSession: vi.fn(async () => ({
       id: "session-1",
