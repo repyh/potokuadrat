@@ -1,4 +1,5 @@
 import type { AlbumIndexProgress, AlbumSummary } from "./album";
+import type { BrandingOverride } from "./branding";
 
 /** Where a folder option came from in the Drive picker. */
 export const DRIVE_FOLDER_SOURCES = ["shared", "shared_drive", "pasted"] as const;
@@ -48,6 +49,18 @@ export interface AlbumDetailResponse {
 
 export interface AlbumListResponse {
   albums: AlbumSummary[];
+}
+
+export interface UpdateAlbumInput {
+  title?: string;
+  branding?: BrandingOverride | null;
+  /** Replaces the whole folder set and queues a full re-index. */
+  folders?: AlbumFolderInput[];
+}
+
+export interface SetAlbumCoverInput {
+  /** null clears the cover. */
+  photoId: string | null;
 }
 
 /**

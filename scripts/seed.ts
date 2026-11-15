@@ -140,6 +140,14 @@ async function main() {
     .values(photoRows)
     .returning({ id: photos.id });
 
+  // The dashboard needs a cover state without any extra setup.
+  if (insertedPhotos[0]) {
+    await db
+      .update(albums)
+      .set({ coverPhotoId: insertedPhotos[0].id })
+      .where(eq(albums.id, album.id));
+  }
+
   const { hashPassword } = await import("better-auth/crypto");
   const passwordHash = await hashPassword(SEED_SHARE_PASSWORD);
 

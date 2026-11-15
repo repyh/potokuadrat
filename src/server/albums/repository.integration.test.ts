@@ -1,5 +1,13 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import {
+  albums,
+  clientSessions,
+  favorites,
+  photos,
+  shares,
+} from "@/server/db/schema";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -132,6 +140,58 @@ describe.skipIf(!databaseUrl)("album repository", () => {
     expect((await repository.getAlbumDetail(album.id))?.album.status).toBe("ready");
   });
 
+
+  it("updates the title, branding, and folder set", async () => {
+    const [album] = await repository.listAlbums("user-1");
+
+    await repository.updateAlbum(album.id, {
+      title: "Renamed Album",
+      branding: { accent: "#ff0066" },
+    });
+
+    const [stored] = await db
+      .select({ title: albums.title, branding: albums.branding })
+      .from(albums)
+      .where(eq(albums.id, album.id));
+
+    expect(stored.title).toBe("Renamed Album");
+    expect(stored.branding).toEqual({ accent: "#ff0066" });
+
+    const [replacement] = await repository.ensureDriveFolders("user-1", [
+      { driveFolderId: "drive-folder-2", name: "Replacement", recursive: false },
+    ]);
+    await repository.replaceFolders(album.id, [replacement.id]);
+
+    const folders = await repository.getAlbumFolders(album.id);
+    expect(folders).toHaveLength(1);
+    expect(folders[0]).toMatchObject({ driveFolderId: "drive-folder-2", recursive: false });
+  });
+
+  it("sets and clears a cover only from the album's own photos", async () => {
+    const [album] = await repository.listAlbums("user-1");
+    const albumPhotos = await db
+      .select({ id: photos.id })
+      .from(photos)
+      .where(eq(photos.albumId, album.id))
+      .limit(1);
+
+    expect(await repository.findAlbumPhoto(album.id, albumPhotos[0].id)).toEqual({
+      id: albumPhotos[0].id,
+    });
+    expect(
+      await repository.findAlbumPhoto(album.id, "10000000-0000-4000-8000-000000000099"),
+    ).toBeNull();
+
+    await repository.setCoverPhoto(album.id, albumPhotos[0].id);
+    expect((await repository.getAlbumDetail(album.id))?.album.coverPhotoId).toBe(
+      albumPhotos[0].id,
+    );
+
+    await repository.setCoverPhoto(album.id, null);
+    expect((await repository.getAlbumDetail(album.id))?.album.coverPhotoId).toBeNull();
+  });
+
+
   it("upserts by album and Drive file id instead of duplicating", async () => {
     const [album] = await repository.listAlbums("user-1");
 
@@ -151,5 +211,59 @@ describe.skipIf(!databaseUrl)("album repository", () => {
 
     const progress = await repository.countProgress(album.id);
     expect(progress.total).toBe(2);
+  });
+  it("cascades photos, shares, sessions, and favorites on delete", async () => {
+    const [album] = await repository.listAlbums("user-1");
+    const [photo] = await db
+      .select({ id: photos.id })
+      .from(photos)
+      .where(eq(photos.albumId, album.id))
+      .limit(1);
+
+    await db.insert(shares).values({
+      albumId: album.id,
+      slug: "lifecycle-share",
+      mode: "magic_link",
+    });
+    const [share] = await db
+      .select({ id: shares.id })
+      .from(shares)
+      .where(eq(shares.slug, "lifecycle-share"));
+
+    await db.insert(clientSessions).values({
+      id: "40000000-0000-4000-8000-000000000001",
+      shareId: share.id,
+      email: "guest@example.com",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await db.insert(favorites).values({
+      clientSessionId: "40000000-0000-4000-8000-000000000001",
+      photoId: photo.id,
+    });
+
+    await repository.deleteAlbum(album.id);
+
+    expect(await repository.getAlbumDetail(album.id)).toBeNull();
+    const [photoCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(photos)
+      .where(eq(photos.albumId, album.id));
+    const [shareCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(shares)
+      .where(eq(shares.albumId, album.id));
+    const [sessionCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(clientSessions)
+      .where(eq(clientSessions.shareId, share.id));
+    const [favoriteCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(favorites)
+      .where(eq(favorites.clientSessionId, "40000000-0000-4000-8000-000000000001"));
+
+    expect(photoCount.count).toBe(0);
+    expect(shareCount.count).toBe(0);
+    expect(sessionCount.count).toBe(0);
+    expect(favoriteCount.count).toBe(0);
   });
 });

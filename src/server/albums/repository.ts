@@ -5,6 +5,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { AlbumIndexProgress, AlbumStatus, AlbumSummary } from "@/contracts/album";
 import type { AlbumDetail, AlbumFolderSummary } from "@/contracts/admin";
+import type { BrandingOverride } from "@/contracts/branding";
 import * as schema from "@/server/db/schema";
 import { albumFolders, albums, driveFolders, photos } from "@/server/db/schema";
 
@@ -58,6 +59,16 @@ export interface AlbumRepository {
   getAlbumFolders(albumId: string): Promise<AlbumFolderRecord[]>;
   getAlbumDetail(albumId: string): Promise<AlbumDetail | null>;
   setStatus(albumId: string, status: AlbumStatus): Promise<void>;
+  updateAlbum(
+    albumId: string,
+    patch: { title?: string; branding?: BrandingOverride | null },
+  ): Promise<void>;
+  /** Replaces the album's folder set with local `drive_folders` ids. */
+  replaceFolders(albumId: string, folderIds: string[]): Promise<void>;
+  deleteAlbum(albumId: string): Promise<void>;
+  setCoverPhoto(albumId: string, photoId: string | null): Promise<void>;
+  /** Returns the photo only when it belongs to the album and is not tombstoned. */
+  findAlbumPhoto(albumId: string, photoId: string): Promise<{ id: string } | null>;
   markFoldersIndexed(folderIds: string[], at: Date): Promise<void>;
   upsertPhotos(albumId: string, rows: IndexedPhoto[]): Promise<void>;
   markMissingPhotos(albumId: string, seenDriveFileIds: string[]): Promise<number>;
@@ -301,6 +312,61 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         .update(albums)
         .set({ status, updatedAt: new Date() })
         .where(eq(albums.id, albumId));
+    },
+
+    async updateAlbum(albumId, patch) {
+      const values: Record<string, unknown> = { updatedAt: new Date() };
+      if (patch.title !== undefined) {
+        values.title = patch.title;
+      }
+      if (patch.branding !== undefined) {
+        values.branding = patch.branding;
+      }
+
+      await db.update(albums).set(values).where(eq(albums.id, albumId));
+    },
+
+    async replaceFolders(albumId, folderIds) {
+      await db.transaction(async (tx) => {
+        await tx.delete(albumFolders).where(eq(albumFolders.albumId, albumId));
+
+        if (folderIds.length > 0) {
+          await tx.insert(albumFolders).values(
+            folderIds.map((driveFolderId, position) => ({
+              albumId,
+              driveFolderId,
+              position,
+            })),
+          );
+        }
+      });
+    },
+
+    async deleteAlbum(albumId) {
+      await db.delete(albums).where(eq(albums.id, albumId));
+    },
+
+    async setCoverPhoto(albumId, photoId) {
+      await db
+        .update(albums)
+        .set({ coverPhotoId: photoId, updatedAt: new Date() })
+        .where(eq(albums.id, albumId));
+    },
+
+    async findAlbumPhoto(albumId, photoId) {
+      const [row] = await db
+        .select({ id: photos.id })
+        .from(photos)
+        .where(
+          and(
+            eq(photos.id, photoId),
+            eq(photos.albumId, albumId),
+            isNull(photos.missingAt),
+          ),
+        )
+        .limit(1);
+
+      return row ?? null;
     },
 
     async upsertPhotos(albumId, rows) {

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { AlbumSummary } from "@/contracts/album";
-import type { AlbumDetail, CreateAlbumInput } from "@/contracts/admin";
+import type { AlbumDetail, AlbumFolderInput, CreateAlbumInput, UpdateAlbumInput } from "@/contracts/admin";
 import { DriveError, parseDriveFolderInput, type DriveClient } from "@/server/drive/client";
 
 import type { AlbumRepository, FolderInput } from "./repository";
@@ -29,14 +29,27 @@ export interface AlbumService {
   create(ownerUserId: string, input: CreateAlbumInput): Promise<AlbumSummary>;
   detail(albumId: string): Promise<AlbumDetail | null>;
   reindex(albumId: string, mode?: "full" | "incremental"): Promise<boolean>;
+  /** Returns null when the album is missing or belongs to someone else. */
+  update(
+    ownerUserId: string,
+    albumId: string,
+    input: UpdateAlbumInput,
+  ): Promise<AlbumDetail | null>;
+  remove(ownerUserId: string, albumId: string): Promise<boolean>;
+  /** Returns null when the album is missing or belongs to someone else. */
+  setCover(
+    ownerUserId: string,
+    albumId: string,
+    photoId: string | null,
+  ): Promise<AlbumDetail | null>;
 }
 
 export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
-  async function resolveFolders(input: CreateAlbumInput): Promise<FolderInput[]> {
+  async function resolveFolders(items: AlbumFolderInput[]): Promise<FolderInput[]> {
     const seen = new Set<string>();
     const folders: FolderInput[] = [];
 
-    for (const item of input.folders) {
+    for (const item of items) {
       const driveFolderId = parseDriveFolderInput(item.driveFolderId);
       if (!driveFolderId) {
         throw new AlbumValidationError("Enter a valid Drive folder link or id.");
@@ -80,7 +93,7 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
     },
 
     async create(ownerUserId, input) {
-      const folders = await resolveFolders(input);
+      const folders = await resolveFolders(input.folders);
       const records = await deps.repository.ensureDriveFolders(ownerUserId, folders);
 
       const album = await deps.repository.createAlbum({
@@ -113,6 +126,68 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
       await deps.repository.setStatus(albumId, "indexing");
       await deps.enqueueIndex(albumId, { mode });
       return true;
+    },
+
+    async update(ownerUserId, albumId, input) {
+      const album = await deps.repository.getAlbum(albumId);
+      if (!album || album.ownerUserId !== ownerUserId) {
+        return null;
+      }
+
+      const title = input.title?.trim();
+      if (input.title !== undefined && (!title || title.length < 2)) {
+        throw new AlbumValidationError("Enter an album title.");
+      }
+
+      if (title !== undefined || input.branding !== undefined) {
+        await deps.repository.updateAlbum(albumId, { title, branding: input.branding });
+      }
+
+      if (input.folders) {
+        const folders = await resolveFolders(input.folders);
+        const records = await deps.repository.ensureDriveFolders(ownerUserId, folders);
+        await deps.repository.replaceFolders(
+          albumId,
+          records.map((record) => record.id),
+        );
+        await deps.repository.setStatus(albumId, "indexing");
+
+        try {
+          await deps.enqueueIndex(albumId, { mode: "full" });
+        } catch (error) {
+          await deps.repository.setStatus(albumId, "failed");
+          throw error;
+        }
+      }
+
+      return deps.repository.getAlbumDetail(albumId);
+    },
+
+    async remove(ownerUserId, albumId) {
+      const album = await deps.repository.getAlbum(albumId);
+      if (!album || album.ownerUserId !== ownerUserId) {
+        return false;
+      }
+
+      await deps.repository.deleteAlbum(albumId);
+      return true;
+    },
+
+    async setCover(ownerUserId, albumId, photoId) {
+      const album = await deps.repository.getAlbum(albumId);
+      if (!album || album.ownerUserId !== ownerUserId) {
+        return null;
+      }
+
+      if (photoId !== null) {
+        const photo = await deps.repository.findAlbumPhoto(albumId, photoId);
+        if (!photo) {
+          throw new AlbumValidationError("Choose a photo from this album.");
+        }
+      }
+
+      await deps.repository.setCoverPhoto(albumId, photoId);
+      return deps.repository.getAlbumDetail(albumId);
     },
   };
 }
