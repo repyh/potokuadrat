@@ -162,6 +162,20 @@ Their shapes live in `src/contracts/share.ts`.
 - Deleting a share cascades its recipients, frozen subset, client sessions, and
   favorites.
 
+## Organization settings
+
+`src/app/admin/settings/actions.ts` exposes admin Server Actions returning
+`ActionResult<T>`: read and update the organization's branding (`name`, `title`,
+`logo`, `accent`, `footerEnabled`) and metadata policy (`stripMetadata`), plus a Drive
+status probe.
+
+- The organization is a singleton; it is created with defaults on first read when setup
+  has not created it yet.
+- `stripMetadata` is the default every share inherits; a share-level value still wins.
+- Drive status reports `not_configured`, `reachable` (with the number of visible folders
+  and Shared Drives), or `failing`. It never returns the service-account key, client
+  email, or raw Google errors.
+
 ## Security notes
 
 - Never commit the service-account key or `.env.local`. The key grants read access to
