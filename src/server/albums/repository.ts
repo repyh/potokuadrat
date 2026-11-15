@@ -21,6 +21,7 @@ export interface AlbumFolderRecord {
   driveFolderId: string;
   name: string;
   recursive: boolean;
+  lastIndexedAt: Date | null;
 }
 
 export interface FolderInput {
@@ -57,6 +58,7 @@ export interface AlbumRepository {
   getAlbumFolders(albumId: string): Promise<AlbumFolderRecord[]>;
   getAlbumDetail(albumId: string): Promise<AlbumDetail | null>;
   setStatus(albumId: string, status: AlbumStatus): Promise<void>;
+  markFoldersIndexed(folderIds: string[], at: Date): Promise<void>;
   upsertPhotos(albumId: string, rows: IndexedPhoto[]): Promise<void>;
   markMissingPhotos(albumId: string, seenDriveFileIds: string[]): Promise<number>;
   countProgress(albumId: string): Promise<AlbumIndexProgress>;
@@ -139,6 +141,7 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         driveFolderId: driveFolders.driveFolderId,
         name: driveFolders.name,
         recursive: driveFolders.recursive,
+        lastIndexedAt: driveFolders.lastIndexedAt,
       })
       .from(albumFolders)
       .innerJoin(driveFolders, eq(albumFolders.driveFolderId, driveFolders.id))
@@ -177,6 +180,7 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
           driveFolderId: driveFolders.driveFolderId,
           name: driveFolders.name,
           recursive: driveFolders.recursive,
+          lastIndexedAt: driveFolders.lastIndexedAt,
         })
         .from(driveFolders)
         .where(
@@ -279,6 +283,17 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         })),
         progress,
       };
+    },
+
+    async markFoldersIndexed(folderIds, at) {
+      if (folderIds.length === 0) {
+        return;
+      }
+
+      await db
+        .update(driveFolders)
+        .set({ lastIndexedAt: at, updatedAt: at })
+        .where(inArray(driveFolders.id, folderIds));
     },
 
     async setStatus(albumId, status) {

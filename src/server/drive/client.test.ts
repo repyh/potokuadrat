@@ -139,6 +139,65 @@ describe("listImages", () => {
     expect(calls.some((call) => call.includes("subfolder01"))).toBe(false);
   });
 
+  it("retries a 403 rate-limit response", async () => {
+    let attempts = 0;
+    const sleep = vi.fn(async () => {});
+    const { client } = makeClient(
+      (url) => {
+        if (url.hostname === "oauth2.googleapis.com") {
+          return tokenResponse();
+        }
+        attempts += 1;
+        return attempts === 1
+          ? json({ error: { errors: [{ reason: "rateLimitExceeded" }] } }, 403)
+          : json({ files: [fileA] });
+      },
+      { sleep },
+    );
+
+    const photos = await client.listImages("rootfolder01");
+
+    expect(photos).toHaveLength(1);
+    expect(attempts).toBe(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a permission 403", async () => {
+    let attempts = 0;
+    const sleep = vi.fn(async () => {});
+    const { client } = makeClient(
+      (url) => {
+        if (url.hostname === "oauth2.googleapis.com") {
+          return tokenResponse();
+        }
+        attempts += 1;
+        return json({ error: { message: "Forbidden" } }, 403);
+      },
+      { sleep },
+    );
+
+    await expect(client.listImages("rootfolder01")).rejects.toThrow(/403/);
+    expect(attempts).toBe(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("asks Drive only for files modified after a timestamp", async () => {
+    let query = "";
+    const { client } = makeClient((url) => {
+      if (url.hostname === "oauth2.googleapis.com") {
+        return tokenResponse();
+      }
+      query = url.searchParams.get("q") ?? "";
+      return json({ files: [fileA] });
+    });
+
+    await client.listImages("rootfolder01", {
+      modifiedAfter: new Date("2026-11-10T10:00:00Z"),
+    });
+
+    expect(query).toContain("modifiedTime > '2026-11-10T10:00:00.000Z'");
+  });
+
   it("caches the access token between calls", async () => {
     const { client, calls } = makeClient(handler({ root: [{ files: [fileA] }], sub: [] }));
 

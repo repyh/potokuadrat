@@ -8,6 +8,7 @@ export const INDEX_ALBUM_JOB = "index-album";
 
 export interface IndexAlbumJobData {
   albumId: string;
+  mode?: "full" | "incremental";
 }
 
 const queueOptions = {
@@ -28,14 +29,22 @@ async function ensureQueues(boss: PgBoss): Promise<void> {
   await queuesPromise;
 }
 
-export async function enqueueIndexAlbum(albumId: string, boss?: PgBoss): Promise<void> {
+export async function enqueueIndexAlbum(
+  albumId: string,
+  options: { mode?: "full" | "incremental" } = {},
+  boss?: PgBoss,
+): Promise<void> {
   const instance = boss ?? (await getBoss());
   await ensureQueues(instance);
 
-  await instance.send(INDEX_ALBUM_JOB, { albumId } satisfies IndexAlbumJobData, {
-    // One pending index per album: a re-index replaces the previous queued run.
-    singletonKey: albumId,
-  });
+  await instance.send(
+    INDEX_ALBUM_JOB,
+    { albumId, mode: options.mode ?? "full" } satisfies IndexAlbumJobData,
+    {
+      // One pending index per album: a re-index replaces the previous queued run.
+      singletonKey: albumId,
+    },
+  );
 }
 
 /**
@@ -56,10 +65,14 @@ export async function startWorkers(): Promise<void> {
 
     for (const job of jobs) {
       try {
-        await indexAlbum(job.data.albumId, {
-          repository,
-          drive: getDriveRuntime().client,
-        });
+        await indexAlbum(
+          job.data.albumId,
+          {
+            repository,
+            drive: getDriveRuntime().client,
+          },
+          { mode: job.data.mode ?? "full" },
+        );
       } catch (error) {
         // Covers failures before indexAlbum runs, such as missing Drive credentials.
         await repository.setStatus(job.data.albumId, "failed").catch(() => {});

@@ -1,0 +1,1 @@
+ALTER TABLE "drive_folders" ADD COLUMN "last_indexed_at" timestamp with time zone;

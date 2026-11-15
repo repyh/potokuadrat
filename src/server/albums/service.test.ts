@@ -81,7 +81,7 @@ describe("createAlbumService", () => {
     expect(repo.createAlbum).toHaveBeenCalledWith(
       expect.objectContaining({ ownerUserId: "user-1", title: "Autumn Symposium" }),
     );
-    expect(enqueue).toHaveBeenCalledWith("album-1");
+    expect(enqueue).toHaveBeenCalledWith("album-1", { mode: "full" });
   });
 
   it("accepts a Drive folder URL and fetches the name when it is missing", async () => {
@@ -140,7 +140,7 @@ describe("createAlbumService", () => {
 
     expect(await service.reindex("album-1")).toBe(true);
     expect(repo.setStatus).toHaveBeenCalledWith("album-1", "indexing");
-    expect(enqueue).toHaveBeenCalledWith("album-1");
+    expect(enqueue).toHaveBeenCalledWith("album-1", { mode: "full" });
 
     const missing = makeService(repository({ getAlbum: vi.fn(async () => null) }));
     expect(await missing.reindex("nope")).toBe(false);

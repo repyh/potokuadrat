@@ -13,6 +13,8 @@ export const driveFolders = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     // Recursive listing is on by default and can be turned off per folder.
     recursive: boolean("recursive").default(true).notNull(),
+    // Last successful listing; incremental runs request only newer files.
+    lastIndexedAt: timestamp("last_indexed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

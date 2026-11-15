@@ -114,10 +114,13 @@ Every route requires an admin session cookie (sign in through `/login` or
 | `GET /api/admin/albums` | Albums owned by the signed-in admin |
 | `POST /api/admin/albums` | Create an album from `{ title, folders[] }` and queue indexing |
 | `GET /api/admin/albums/:id` | Album, folders, and indexing progress |
-| `POST /api/admin/albums/:id/reindex` | Queue a re-index (tombstones files that disappeared) |
+| `POST /api/admin/albums/:id/reindex` | Queue a re-index; `?mode=incremental` only fetches modified files |
 
-Indexing runs through `pg-boss` in the app process. A re-index never downloads files;
-it only reads folder metadata and clears or sets the `missing_at` tombstone.
+Indexing runs through `pg-boss` in the app process. A full re-index re-lists every
+folder and sets `missing_at` on files that disappeared. `mode=incremental` requests
+only files modified since each folder's last successful listing, keeps existing
+tombstones, and falls back to a full run until every folder has a timestamp. Drive
+`403` rate-limit responses are retried with the same backoff as `429`/`5xx`.
 
 ## Security notes
 

@@ -18,14 +18,17 @@ export interface AlbumServiceDeps {
   repository: AlbumRepository;
   /** Resolved lazily because listing albums must not require Drive credentials. */
   drive: () => Pick<DriveClient, "getFolder">;
-  enqueueIndex: (albumId: string) => Promise<void>;
+  enqueueIndex: (
+    albumId: string,
+    options?: { mode?: "full" | "incremental" },
+  ) => Promise<void>;
 }
 
 export interface AlbumService {
   list(ownerUserId: string): Promise<AlbumSummary[]>;
   create(ownerUserId: string, input: CreateAlbumInput): Promise<AlbumSummary>;
   detail(albumId: string): Promise<AlbumDetail | null>;
-  reindex(albumId: string): Promise<boolean>;
+  reindex(albumId: string, mode?: "full" | "incremental"): Promise<boolean>;
 }
 
 export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
@@ -88,7 +91,7 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
       });
 
       try {
-        await deps.enqueueIndex(album.id);
+        await deps.enqueueIndex(album.id, { mode: "full" });
       } catch (error) {
         await deps.repository.setStatus(album.id, "failed");
         throw error;
@@ -101,14 +104,14 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
       return deps.repository.getAlbumDetail(albumId);
     },
 
-    async reindex(albumId) {
+    async reindex(albumId, mode = "full") {
       const album = await deps.repository.getAlbum(albumId);
       if (!album) {
         return false;
       }
 
       await deps.repository.setStatus(albumId, "indexing");
-      await deps.enqueueIndex(albumId);
+      await deps.enqueueIndex(albumId, { mode });
       return true;
     },
   };
