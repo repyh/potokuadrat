@@ -18,7 +18,13 @@ export type DownloadScope = (typeof DOWNLOAD_SCOPES)[number];
  * Everything the gallery page needs to decide what to render. Access rules are
  * resolved on the server; the UI never compares expiry or policy itself.
  */
-export const GALLERY_ACCESS = ["ok", "password_required", "expired", "unavailable"] as const;
+export const GALLERY_ACCESS = [
+  "ok",
+  "password_required",
+  "magic_link_required",
+  "expired",
+  "unavailable",
+] as const;
 export type GalleryAccess = (typeof GALLERY_ACCESS)[number];
 
 export interface SharePolicy {

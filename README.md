@@ -71,11 +71,11 @@ forces a rebuild.
 
 ## Share media API
 
-These routes are open to public shares. Password and magic-link shares return `403`/
-`404` until the access gate and client gallery arrive.
-
 | Route | Purpose |
 | --- | --- |
+| `GET /api/share/:slug` | `GalleryState`: access, album, and policy (no-store) |
+| `POST /api/share/:slug/access` | Exchange a share password for a signed cookie |
+| `POST /api/share/:slug/magic` | Exchange a one-time magic-link token for a client session |
 | `GET /s/:slug/thumb/:photoId?w=400\|800\|1600\|2048` | Cached thumbnail; `download=1` adds an attachment name |
 | `GET /s/:slug/download/:photoId?quality=original\|web` | Original proxy, or a 2048px JPEG from the cache |
 
@@ -84,6 +84,12 @@ inside the share's frozen subset if one exists. Thumbnails carry a stable `ETag`
 `Cache-Control: immutable`; a matching `If-None-Match` returns `304`. The effective
 metadata policy is the share override with the organization fallback, and clean and
 raw entries never share a cache file.
+
+Password and magic-link shares are protected by an HttpOnly, SameSite=Lax cookie signed
+with `BETTER_AUTH_SECRET`; the password cookie lasts 12 hours, a magic-link session 7
+days. Password attempts are limited to 5 per minute per share and client, magic-link
+exchanges to 10. Expired shares return `410`, missing proof `403`, and unknown shares
+or photos `404`. In development, the seeded magic token is `seed-magic-token`.
 
 In development, the seeded album (`seed-photo-*`) serves generated SVG placeholders so
 the gallery runs without Google credentials. That path is disabled in production

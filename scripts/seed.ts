@@ -4,6 +4,8 @@
  *
  * Run with `npm run db:seed` after `npm run db:migrate`.
  */
+import { createHash } from "node:crypto";
+
 import { config } from "dotenv";
 import { eq } from "drizzle-orm";
 
@@ -31,6 +33,7 @@ const SEED_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@potokuadrat.loca
 const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "potokuadrat-seed";
 const SEED_SHARE_PASSWORD = "seed-pass-123";
 const SEED_RECIPIENT_EMAIL = "guest@example.com";
+const SEED_MAGIC_TOKEN = "seed-magic-token";
 const PHOTO_COUNT = 24;
 
 const db = getDb();
@@ -182,7 +185,7 @@ async function main() {
   await db.insert(shareRecipients).values({
     shareId: magicShare.id,
     email: SEED_RECIPIENT_EMAIL,
-    tokenHash: "seed-recipient-token-hash",
+    tokenHash: createHash("sha256").update(SEED_MAGIC_TOKEN).digest("hex"),
   });
 
   const [clientSession] = await db
@@ -206,7 +209,7 @@ async function main() {
   console.log(`  album:  ${SEED_ALBUM_SLUG} (${PHOTO_COUNT} photos, status ready)`);
   console.log("  shares: seed-public, seed-password, seed-expired, seed-magic");
   console.log(`  share password: ${SEED_SHARE_PASSWORD}`);
-  console.log(`  magic-link recipient: ${SEED_RECIPIENT_EMAIL}`);
+  console.log(`  magic-link recipient: ${SEED_RECIPIENT_EMAIL} / ${SEED_MAGIC_TOKEN}`);
 }
 
 main()
