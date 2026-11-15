@@ -50,6 +50,14 @@ export interface GalleryState {
   policy: SharePolicy | null;
 }
 
+/**
+ * Server-side favorites for a magic-link session. Public and password shares keep
+ * favorites in the browser instead, so this shape is only returned for magic links.
+ */
+export interface FavoritesResponse {
+  photoIds: string[];
+}
+
 export interface DownloadRequest {
   quality: DownloadQuality;
   scope: DownloadScope;
