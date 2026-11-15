@@ -7,12 +7,17 @@ const share: ShareRecord = {
   id: "share-1",
   slug: "public-share",
   mode: "public",
+  passwordHash: null,
   expiresAt: null,
   allowDownload: true,
   allowedQualities: ["original", "web"],
   stripMetadata: null,
   albumId: "album-1",
+  albumSlug: "album",
   albumTitle: "Album",
+  albumBranding: null,
+  photographerName: "Owner",
+  photoCount: 2,
   organizationStripMetadata: true,
 };
 
@@ -30,6 +35,13 @@ function repository(overrides: Partial<ShareRepository> = {}): ShareRepository {
   return {
     findBySlug: vi.fn(async () => share),
     getSharePhoto: vi.fn(async () => photo),
+    consumeRecipient: vi.fn(async () => null),
+    createClientSession: vi.fn(async () => ({
+      id: "session-1",
+      email: "guest@example.com",
+      expiresAt: new Date(),
+    })),
+    findClientSession: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -50,7 +62,7 @@ describe("resolveShareMedia", () => {
     expect(repo.getSharePhoto).not.toHaveBeenCalled();
   });
 
-  it("410s an expired share", async () => {
+  it("410s an expired share even when authorized", async () => {
     const repo = repository({
       findBySlug: vi.fn(async () => ({
         ...share,
@@ -58,13 +70,12 @@ describe("resolveShareMedia", () => {
       })),
     });
 
-    expect(await resolveShareMedia(repo, "public-share", "photo-1")).toMatchObject({
-      ok: false,
-      status: 410,
-    });
+    expect(
+      await resolveShareMedia(repo, "public-share", "photo-1", { authorize: async () => true }),
+    ).toMatchObject({ ok: false, status: 410 });
   });
 
-  it("403s a password share until the gate exists", async () => {
+  it("403s a password share until it is authorized", async () => {
     const repo = repository({
       findBySlug: vi.fn(async () => ({ ...share, mode: "password" as const })),
     });
@@ -75,14 +86,24 @@ describe("resolveShareMedia", () => {
     });
   });
 
-  it("404s a magic-link share until the gate exists", async () => {
+  it("opens a password share when the authorizer accepts the proof", async () => {
+    const repo = repository({
+      findBySlug: vi.fn(async () => ({ ...share, mode: "password" as const })),
+    });
+
+    expect(
+      await resolveShareMedia(repo, "public-share", "photo-1", { authorize: async () => true }),
+    ).toEqual({ ok: true, share: { ...share, mode: "password" }, photo });
+  });
+
+  it("403s a magic-link share until it is authorized", async () => {
     const repo = repository({
       findBySlug: vi.fn(async () => ({ ...share, mode: "magic_link" as const })),
     });
 
     expect(await resolveShareMedia(repo, "public-share", "photo-1")).toMatchObject({
       ok: false,
-      status: 404,
+      status: 403,
     });
   });
 

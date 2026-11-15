@@ -2,6 +2,7 @@ import type { DownloadQuality } from "@/contracts/share";
 import { getDriveRuntime } from "@/server/drive";
 import { baseName, makeContentDisposition } from "@/server/drive/download";
 import { seedThumbnail } from "@/server/drive/seed-thumbnails";
+import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareMedia } from "@/server/shares/media";
 import { canDownload, resolveStripMetadata } from "@/server/shares/policy";
 import { getShareRepository } from "@/server/shares/runtime";
@@ -23,7 +24,11 @@ async function handle(request: Request, { params }: Context): Promise<Response> 
     return Response.json({ error: "Unsupported download quality." }, { status: 400 });
   }
 
-  const resolved = await resolveShareMedia(getShareRepository(), slug, photoId);
+  const repository = getShareRepository();
+  const resolved = await resolveShareMedia(repository, slug, photoId, {
+    authorize: async (share) =>
+      (await authorizeShareRequest(repository, request, share)).authorized,
+  });
   if (!resolved.ok) {
     return Response.json({ error: resolved.error }, { status: resolved.status });
   }

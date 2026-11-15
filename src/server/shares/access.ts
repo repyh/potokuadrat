@@ -1,29 +1,31 @@
 import type { ShareMode } from "@/contracts/share";
 
-export type ShareAccess = "ok" | "password_required" | "expired" | "unavailable";
+export type ShareAccess =
+  | "ok"
+  | "password_required"
+  | "magic_link_required"
+  | "expired"
+  | "unavailable";
 
 /**
- * Share access before any client session is considered. Password and magic-link shares
- * are closed here until the access gate exists; the media routes only serve public
- * shares for now.
+ * Resolves share access. Expiry always wins. A password or magic-link share is only
+ * `ok` when the caller presents valid proof (a signed cookie and, for magic links, a
+ * live client session).
  */
 export function resolveShareAccess(
   share: { mode: ShareMode; expiresAt: Date | null },
   now: Date = new Date(),
+  authorized = false,
 ): ShareAccess {
   if (share.expiresAt && share.expiresAt.getTime() <= now.getTime()) {
     return "expired";
   }
 
-  if (share.mode === "password") {
-    return "password_required";
+  if (share.mode === "public" || authorized) {
+    return "ok";
   }
 
-  if (share.mode === "magic_link") {
-    return "unavailable";
-  }
-
-  return "ok";
+  return share.mode === "password" ? "password_required" : "magic_link_required";
 }
 
 export function statusForAccess(access: Exclude<ShareAccess, "ok">): number {
@@ -31,6 +33,7 @@ export function statusForAccess(access: Exclude<ShareAccess, "ok">): number {
     case "expired":
       return 410;
     case "password_required":
+    case "magic_link_required":
       return 403;
     default:
       return 404;

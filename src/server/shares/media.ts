@@ -3,6 +3,11 @@ import "server-only";
 import { resolveShareAccess, statusForAccess } from "./access";
 import type { SharePhotoRecord, ShareRecord, ShareRepository } from "./repository";
 
+export interface ShareMediaOptions {
+  /** Returns true when the request carries valid proof for a password/magic share. */
+  authorize?: (share: ShareRecord) => Promise<boolean>;
+}
+
 export type ShareMediaResult =
   | { ok: true; share: ShareRecord; photo: SharePhotoRecord }
   | { ok: false; status: number; error: string };
@@ -12,13 +17,16 @@ export async function resolveShareMedia(
   repository: ShareRepository,
   slug: string,
   photoId: string,
+  options: ShareMediaOptions = {},
 ): Promise<ShareMediaResult> {
   const share = await repository.findBySlug(slug);
   if (!share) {
     return { ok: false, status: 404, error: "Share not found." };
   }
 
-  const access = resolveShareAccess(share);
+  const authorized = options.authorize ? await options.authorize(share) : false;
+  const access = resolveShareAccess(share, new Date(), authorized);
+
   if (access !== "ok") {
     return {
       ok: false,
@@ -28,7 +36,9 @@ export async function resolveShareMedia(
           ? "Share expired."
           : access === "password_required"
             ? "Share requires a password."
-            : "Share unavailable.",
+            : access === "magic_link_required"
+              ? "Share requires a magic link."
+              : "Share unavailable.",
     };
   }
 

@@ -82,7 +82,10 @@ describe.skipIf(!databaseUrl)("share repository", () => {
     expect(share).toMatchObject({
       id: SHARE_WHOLE,
       albumId: ALBUM_ID,
+      albumSlug: "album-1",
       albumTitle: "Album",
+      photographerName: "Owner",
+      photoCount: 2,
       organizationStripMetadata: true,
       allowDownload: true,
     });
@@ -110,5 +113,44 @@ describe.skipIf(!databaseUrl)("share repository", () => {
     const share = await repository.findBySlug("whole");
 
     expect(await repository.getSharePhoto(share!, PHOTO_OTHER)).toBeNull();
+  });
+
+  it("consumes a magic-link token once and creates a live client session", async () => {
+    await db.execute(sql`
+      INSERT INTO share_recipients (share_id, email, token_hash)
+      VALUES (${SHARE_WHOLE}, 'guest@example.com', 'token-hash-1')
+    `);
+
+    const recipient = await repository.consumeRecipient(SHARE_WHOLE, "token-hash-1");
+    expect(recipient).toMatchObject({ email: "guest@example.com" });
+
+    expect(await repository.consumeRecipient(SHARE_WHOLE, "token-hash-1")).toBeNull();
+
+    const session = await repository.createClientSession(
+      SHARE_WHOLE,
+      recipient!.email,
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+
+    expect(await repository.findClientSession(SHARE_WHOLE, session.id)).toMatchObject({
+      email: "guest@example.com",
+    });
+    expect(await repository.findClientSession("20000000-0000-4000-8000-000000000099", session.id)).toBeNull();
+  });
+
+  it("does not return an expired client session", async () => {
+    await db.execute(sql`
+      INSERT INTO client_sessions (id, share_id, email, expires_at)
+      VALUES (
+        '30000000-0000-4000-8000-000000000001',
+        ${SHARE_WHOLE},
+        'guest@example.com',
+        now() - interval '1 minute'
+      )
+    `);
+
+    expect(
+      await repository.findClientSession(SHARE_WHOLE, "30000000-0000-4000-8000-000000000001"),
+    ).toBeNull();
   });
 });
