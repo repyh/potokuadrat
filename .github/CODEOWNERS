@@ -4,36 +4,36 @@
 # Frontend:   repyh, VANTER25
 # QA and CI:  toraaxlv
 
-*                                   @Topher
+*                                   @tophrr
 
 # Backend
-/src/server/                        @Topher
-/drizzle/                           @Topher
-/drizzle.config.ts                  @Topher
-/Dockerfile                         @Topher
-/docker-compose.yml                 @Topher
-/next.config.ts                     @Topher
+/src/server/                        @tophrr
+/drizzle/                           @tophrr
+/drizzle.config.ts                  @tophrr
+/Dockerfile                         @tophrr
+/docker-compose.yml                 @tophrr
+/next.config.ts                     @tophrr
 
 # Shared contracts: backend and both UI developers review the shape.
-/src/contracts/                     @Topher @repyh @VANTER25
+/src/contracts/                     @tophrr @repyh @VANTER25
 
 # Frontend
 /src/features/                      @repyh @VANTER25
 /src/components/ui/                 @repyh @VANTER25
 /src/app/showcase/                  @repyh
 /src/app/                           @repyh @VANTER25
-/src/app/api/                       @Topher
+/src/app/api/                       @tophrr
 
 # QA and CI
 /eslint.config.mjs                  @toraaxlv
 /vitest.config.mts                   @toraaxlv
 /vitest.integration.config.mts       @toraaxlv
-/package.json                        @toraaxlv @Topher
-/package-lock.json                   @toraaxlv @Topher
+/package.json                        @toraaxlv @tophrr
+/package-lock.json                   @toraaxlv @tophrr
 /.github/                            @toraaxlv
 
 # Docs
-/README.md                          @Topher @repyh
+/README.md                          @tophrr @repyh
 /PRODUCT.md                         @repyh @VANTER25
 /DESIGN.md                          @repyh @VANTER25
-/docs/                              @Topher @repyh
+/docs/                              @tophrr @repyh
