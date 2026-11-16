@@ -15,6 +15,9 @@ type AccessRoute = typeof import("@/app/api/share/[slug]/access/route");
 type MagicRoute = typeof import("@/app/api/share/[slug]/magic/route");
 type FavoritesRoute = typeof import("@/app/api/share/[slug]/favorites/route");
 type FavoriteRoute = typeof import("@/app/api/share/[slug]/favorites/[photoId]/route");
+type ArchiveRoute = typeof import("@/app/api/share/[slug]/download.zip/route");
+type ThumbRoute = typeof import("@/app/s/[slug]/thumb/[photoId]/route");
+type DownloadRoute = typeof import("@/app/s/[slug]/download/[photoId]/route");
 
 let db: DbInstance;
 let closeDb: () => Promise<void>;
@@ -24,6 +27,9 @@ let accessRoute: AccessRoute;
 let magicRoute: MagicRoute;
 let favoritesRoute: FavoritesRoute;
 let favoriteRoute: FavoriteRoute;
+let archiveRoute: ArchiveRoute;
+let thumbRoute: ThumbRoute;
+let downloadRoute: DownloadRoute;
 
 const ALBUM = "00000000-0000-4000-8000-000000000001";
 const PHOTO_1 = "10000000-0000-4000-8000-000000000001";
@@ -38,6 +44,13 @@ const SHARE_MAGIC = "20000000-0000-4000-8000-000000000003";
 const SHARE_EXPIRED = "20000000-0000-4000-8000-000000000004";
 const SHARE_SUBSET = "20000000-0000-4000-8000-000000000005";
 const SHARE_MISSING = "20000000-0000-4000-8000-000000000099";
+
+// A second album whose photo is served from the local seed, so the binary routes can
+// be exercised end to end without Google credentials.
+const ALBUM_MEDIA = "00000000-0000-4000-8000-000000000003";
+const PHOTO_SEED = "10000000-0000-4000-8000-000000000005";
+const SHARE_MEDIA = "20000000-0000-4000-8000-000000000006";
+const SHARE_NO_DOWNLOAD = "20000000-0000-4000-8000-000000000007";
 
 const PASSWORD = "open sesame please";
 
@@ -102,6 +115,22 @@ async function seed(): Promise<void> {
   await db.execute(
     sql`INSERT INTO share_photos (share_id, photo_id) VALUES (${SHARE_SUBSET}, ${PHOTO_1})`,
   );
+
+  // Binary routes need a photo the local seed can serve ("seed-photo-NN"), plus one
+  // share that forbids downloads so the policy gate is observable.
+  await db.execute(
+    sql`INSERT INTO albums (id, slug, title, status, owner_user_id) VALUES (${ALBUM_MEDIA}, 'album-media', 'Media', 'ready', 'user-1')`,
+  );
+  await db.execute(sql`
+    INSERT INTO photos (id, album_id, drive_file_id, name, width, height, sort_index)
+    VALUES (${PHOTO_SEED}, ${ALBUM_MEDIA}, 'seed-photo-01', 'Seed.jpg', 6000, 4000, 0)
+  `);
+  await db.execute(sql`
+    INSERT INTO shares (id, album_id, slug, mode, allow_download)
+    VALUES
+      (${SHARE_MEDIA}, ${ALBUM_MEDIA}, 'media-share', 'public', true),
+      (${SHARE_NO_DOWNLOAD}, ${ALBUM_MEDIA}, 'no-download-share', 'public', false)
+  `);
 }
 
 describe.skipIf(!databaseUrl)("share route handlers", () => {
@@ -109,6 +138,11 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.BETTER_AUTH_SECRET = "test-secret-".padEnd(48, "x");
     process.env.BETTER_AUTH_URL = "http://localhost:3000";
+    // The zip route resolves the Drive runtime before it authorizes the request, but
+    // the service-account key is only read lazily when a real file is streamed. The
+    // seeded photos never stream from Drive, so a path is all it needs.
+    process.env.GOOGLE_DRIVE_KEY_FILE = "/nonexistent/service-account.json";
+    process.env.THUMB_CACHE_DIR = "/tmp/potokuadrat-test-thumbs";
 
     const dbModule = await import("@/server/db/client");
     db = dbModule.getDb();
@@ -120,6 +154,9 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
     magicRoute = await import("@/app/api/share/[slug]/magic/route");
     favoritesRoute = await import("@/app/api/share/[slug]/favorites/route");
     favoriteRoute = await import("@/app/api/share/[slug]/favorites/[photoId]/route");
+    archiveRoute = await import("@/app/api/share/[slug]/download.zip/route");
+    thumbRoute = await import("@/app/s/[slug]/thumb/[photoId]/route");
+    downloadRoute = await import("@/app/s/[slug]/download/[photoId]/route");
   });
 
   beforeEach(async () => {
@@ -226,21 +263,34 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
       expect(unknown.status).toBe(404);
     });
 
-    it("rejects an invalid filter but clamps an oversized limit", async () => {
+    it("rejects an invalid filter", async () => {
       const badFilter = await photosRoute.GET(
         new Request(`http://localhost:3000/api/share/public-share/photos?filter=sideways`),
         context({ slug: "public-share" }),
       );
       expect(badFilter.status).toBe(400);
+    });
 
-      // parsePhotoQuery clamps instead of rejecting: "A large limit is clamped instead
-      // of rejected; the client still gets a page."
-      const clamped = await photosRoute.GET(
+    it("clamps an oversized limit to the maximum page size", async () => {
+      // The seed has two live photos, so `<= 200` would hold even if the route
+      // accepted 500 verbatim. Seed past the clamp so the difference is visible.
+      await db.execute(sql`
+        INSERT INTO photos (album_id, drive_file_id, name, width, height, sort_index)
+        SELECT ${ALBUM}, 'bulk-' || g, 'Bulk ' || g || '.jpg', 6000, 4000, 100 + g
+        FROM generate_series(1, 205) AS g
+      `);
+
+      const response = await photosRoute.GET(
         new Request(`http://localhost:3000/api/share/public-share/photos?limit=500`),
         context({ slug: "public-share" }),
       );
-      expect(clamped.status).toBe(200);
-      expect((await clamped.json()).photos.length).toBeLessThanOrEqual(200);
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      // Two seeded photographs plus the 205 bulk rows.
+      expect(body.total).toBe(207);
+      expect(body.photos).toHaveLength(200);
+      expect(body.nextCursor).toBeTruthy();
     });
 
     it("rejects a non-numeric or non-positive limit", async () => {
@@ -524,6 +574,141 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
         context({ slug: "magic-share", photoId: PHOTO_MISSING }),
       );
       expect(missing.status).toBe(404);
+    });
+  });
+
+  describe("GET /s/[slug]/thumb/[photoId]", () => {
+    it("serves a seed thumbnail and answers 304 for a matching ETag", async () => {
+      const first = await thumbRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/thumb/${PHOTO_SEED}?w=400`),
+        context({ slug: "media-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(first.status).toBe(200);
+      expect(first.headers.get("content-type")).toBe("image/svg+xml");
+      expect(first.headers.get("cache-control")).toMatch(/immutable/);
+
+      const etag = first.headers.get("etag");
+      expect(etag).toBeTruthy();
+
+      const cached = await thumbRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/thumb/${PHOTO_SEED}?w=400`, {
+          headers: { "if-none-match": etag! },
+        }),
+        context({ slug: "media-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(cached.status).toBe(304);
+      expect(cached.headers.get("etag")).toBe(etag);
+    });
+
+    it("rejects an unsupported width", async () => {
+      const response = await thumbRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/thumb/${PHOTO_SEED}?w=999`),
+        context({ slug: "media-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toMatch(/width/i);
+    });
+
+    it("gates a password share and rejects a photo from another album", async () => {
+      const gated = await thumbRoute.GET(
+        new Request(`http://localhost:3000/s/password-share/thumb/${PHOTO_1}`),
+        context({ slug: "password-share", photoId: PHOTO_1 }),
+      );
+      expect(gated.status).toBe(403);
+      expect((await gated.json()).error).toMatch(/password/i);
+
+      const outside = await thumbRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/thumb/${PHOTO_1}`),
+        context({ slug: "media-share", photoId: PHOTO_1 }),
+      );
+      expect(outside.status).toBe(404);
+    });
+  });
+
+  describe("GET /s/[slug]/download/[photoId]", () => {
+    it("serves a seed original as an attachment", async () => {
+      const response = await downloadRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/download/${PHOTO_SEED}`),
+        context({ slug: "media-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/svg+xml");
+      // The local seed serves SVG placeholder bytes, and the route keeps that
+      // extension so the zip entry and the download agree.
+      expect(response.headers.get("content-disposition")).toBe(
+        'attachment; filename="Seed.svg"',
+      );
+      expect(await response.text()).toContain("<svg");
+    });
+
+    it("rejects an unknown quality", async () => {
+      const response = await downloadRoute.GET(
+        new Request(`http://localhost:3000/s/media-share/download/${PHOTO_SEED}?quality=lossless`),
+        context({ slug: "media-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toMatch(/quality/i);
+    });
+
+    it("refuses a share that forbids downloads", async () => {
+      const response = await downloadRoute.GET(
+        new Request(`http://localhost:3000/s/no-download-share/download/${PHOTO_SEED}`),
+        context({ slug: "no-download-share", photoId: PHOTO_SEED }),
+      );
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatch(/does not allow/i);
+    });
+  });
+
+  describe("GET /api/share/[slug]/download.zip", () => {
+    it("streams a zip named after the album and quality", async () => {
+      const response = await archiveRoute.GET(
+        new Request("http://localhost:3000/api/share/media-share/download.zip?quality=original"),
+        context({ slug: "media-share" }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/zip");
+      expect(response.headers.get("content-disposition")).toContain("album-media-original.zip");
+
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // Local file header magic: "PK".
+      expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
+    });
+
+    it("answers 404 for an unknown slug and 403 for a gated share", async () => {
+      const unknown = await archiveRoute.GET(
+        new Request("http://localhost:3000/api/share/nope/download.zip"),
+        context({ slug: "nope" }),
+      );
+      expect(unknown.status).toBe(404);
+
+      const gated = await archiveRoute.GET(
+        new Request("http://localhost:3000/api/share/password-share/download.zip"),
+        context({ slug: "password-share" }),
+      );
+      expect(gated.status).toBe(403);
+      expect((await gated.json()).error).toMatch(/password/i);
+    });
+
+    it("rejects an unknown quality and a share that forbids downloads", async () => {
+      const quality = await archiveRoute.GET(
+        new Request("http://localhost:3000/api/share/media-share/download.zip?quality=lossless"),
+        context({ slug: "media-share" }),
+      );
+      expect(quality.status).toBe(400);
+
+      const forbidden = await archiveRoute.GET(
+        new Request("http://localhost:3000/api/share/no-download-share/download.zip"),
+        context({ slug: "no-download-share" }),
+      );
+      expect(forbidden.status).toBe(403);
     });
   });
 
