@@ -43,6 +43,19 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    # The image is node:24-alpine and ships no curl, so the probe uses node's own
+    # fetch. It hits /api/health, which returns 503 when Postgres is unreachable —
+    # a web process that cannot query the database fails every real request anyway.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - thumbs:/app/.cache/thumbs
       - ./secrets:/app/secrets:ro
