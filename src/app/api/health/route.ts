@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
 import { connection } from "next/server";
 
-import { getDb } from "@/server/db/client";
+import { pingDatabase } from "@/server/db/client";
 
 /**
  * Liveness and readiness in one endpoint, for a container orchestrator or a load
@@ -13,6 +12,10 @@ import { getDb } from "@/server/db/client";
  * "Route segment config \"dynamic\" is not compatible with nextConfig.cacheComponents").
  * Awaiting it marks the route as request-time, which is what a health probe needs.
  *
+ * The probe is bounded (2s connect and read), so a wedged database fails the check
+ * instead of holding the request open until the client-side healthcheck times out and
+ * piling up stuck connections. See `pingDatabase`.
+ *
  * The body is deliberately small and never echoes the error: a health endpoint is
  * usually reachable without authentication, so it must not leak connection strings,
  * hostnames, or driver messages.
@@ -21,7 +24,7 @@ export async function GET(): Promise<Response> {
   await connection();
 
   try {
-    await getDb().execute(sql`select 1`);
+    await pingDatabase();
   } catch {
     return Response.json(
       { status: "unavailable", database: "down" },

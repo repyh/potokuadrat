@@ -46,6 +46,10 @@ services:
     # The image is node:24-alpine and ships no curl, so the probe uses node's own
     # fetch. It hits /api/health, which returns 503 when Postgres is unreachable —
     # a web process that cannot query the database fails every real request anyway.
+    #
+    # Compose reports an unhealthy container; it never restarts one. `docker compose ps`
+    # and anything reading health status see the failure, but recovery needs an
+    # orchestrator (or a host-level watcher) — auto-restart is not part of this file.
     healthcheck:
       test:
         - CMD
