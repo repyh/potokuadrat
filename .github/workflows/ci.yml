@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+# A new push to the same branch cancels the previous run: PR feedback stays about
+# the current commit, and a long integration run never blocks a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # Fast checks first. They need no database, so they answer within a minute and
+  # a broken type or lint never waits behind a Postgres boot.
+  static:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # The repo pins Node 24 in .nvmrc and `engines`; read it from there so the
+          # workflow cannot drift from the runtime the app declares.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  # `next build` is the step the Docker image runs, and it compiles more than tsc
+  # sees: route segment configs, server/client boundaries, and the bundle itself.
+  # A tree can be lint- and type-clean and still fail here (cacheComponents rejects
+  # route segment configs), so the build gets its own job.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+  # Integration tests run against a real Postgres 16, the same major version
+  # docker-compose.yml ships. TEST_DATABASE_URL is what the test files read; they
+  # skip themselves when it is absent, so a missing service would silently pass.
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: potokuadrat
+          POSTGRES_PASSWORD: potokuadrat
+          POSTGRES_DB: potokuadrat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U potokuadrat -d potokuadrat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://potokuadrat:potokuadrat@localhost:5432/potokuadrat_test
+      # drizzle-kit reads MIGRATION_DATABASE_URL first, then DATABASE_URL.
+      MIGRATION_DATABASE_URL: postgresql://potokuadrat:potokuadrat@localhost:5432/potokuadrat_test
+      DATABASE_URL: postgresql://potokuadrat:potokuadrat@localhost:5432/potokuadrat_test
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-outside-tests-000000
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Integration tests
+        run: npm run test:integration
