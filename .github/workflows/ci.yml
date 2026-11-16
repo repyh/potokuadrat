@@ -44,6 +44,28 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+  # `next build` is the step the Docker image runs, and it compiles more than tsc
+  # sees: route segment configs, server/client boundaries, and the bundle itself.
+  # A tree can be lint- and type-clean and still fail here (cacheComponents rejects
+  # route segment configs), so the build gets its own job.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
