@@ -1,14 +1,14 @@
-import type { CSSProperties } from "react";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import Link from "next/link";
 import { connection } from "next/server";
 
 import type { PhotoPage } from "@/contracts/album";
 import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
-import { ShareAccessGate } from "@/features/share/share-access-gate";
-import { ShareGallery } from "@/features/share/share-gallery";
-import { authorizeShareRequest } from "@/server/shares/access-context";
+import { GalleryView } from "@/features/gallery/gallery-view";
+import { ShareAccessGate } from "@/features/gallery/share-access-gate";
 import { resolveShareAccess } from "@/server/shares/access";
+import { authorizeShareRequest } from "@/server/shares/access-context";
 import { listFavorites } from "@/server/shares/favorites";
 import { listShareGallery } from "@/server/shares/gallery";
 import { resolveStripMetadata } from "@/server/shares/policy";
@@ -16,123 +16,108 @@ import { getShareRepository } from "@/server/shares/runtime";
 
 export const instant = false;
 
-type PageProps = {
+type Context = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ token?: string | string[] }>;
 };
 
-interface SharePagePayload {
-  state: GalleryState;
-  initialPage: PhotoPage;
-  initialFavoriteIds: string[];
-}
-
-async function loadSharePayload(slug: string): Promise<SharePagePayload> {
-  const emptyPage: PhotoPage = { photos: [], nextCursor: null, total: 0 };
+export async function generateMetadata({
+  params,
+}: Pick<Context, "params">): Promise<Metadata> {
+  await connection();
+  const { slug } = await params;
   const repository = getShareRepository();
   const share = await repository.findBySlug(slug);
 
   if (!share) {
-    return {
-      state: { access: "unavailable", album: null, policy: null },
-      initialPage: emptyPage,
-      initialFavoriteIds: [],
-    };
+    return { title: "Gallery — Potokuadrat" };
+  }
+
+  return {
+    title: `${share.albumTitle} — Potokuadrat`,
+    description: `Photographic folio for ${share.albumTitle}`,
+  };
+}
+
+export default async function ShareGalleryPage({ params, searchParams }: Context) {
+  await connection();
+
+  const [{ slug }, resolvedSearch] = await Promise.all([params, searchParams]);
+  const initialToken =
+    typeof resolvedSearch.token === "string" ? resolvedSearch.token : null;
+
+  const repository = getShareRepository();
+  const share = await repository.findBySlug(slug);
+
+  if (!share) {
+    notFound();
   }
 
   const reqHeaders = await headers();
   const request = new Request("http://localhost", { headers: reqHeaders });
+
   const authorization = await authorizeShareRequest(repository, request, share);
   const access = resolveShareAccess(share, new Date(), authorization.authorized);
 
-  if (access !== "ok") {
-    return {
-      state: { access, album: null, policy: null },
-      initialPage: emptyPage,
-      initialFavoriteIds: [],
+  let album: GalleryAlbum | null = null;
+  let policy: SharePolicy | null = null;
+  let initialPage: PhotoPage = { photos: [], nextCursor: null, total: 0 };
+  let initialFavoriteIds: string[] = [];
+
+  if (access === "ok") {
+    album = {
+      slug: share.albumSlug,
+      title: share.albumTitle,
+      photoCount: share.photoCount,
+      branding: share.albumBranding,
+      photographerName: share.photographerName,
     };
+
+    policy = {
+      mode: share.mode,
+      allowDownload: share.allowDownload,
+      allowedQualities: share.allowedQualities,
+      stripMetadata: resolveStripMetadata(share, share.organizationStripMetadata),
+      expiresAt: share.expiresAt?.toISOString() ?? null,
+    };
+
+    const [galleryResult, favoritesResult] = await Promise.all([
+      listShareGallery(repository, request, slug, new URLSearchParams()),
+      share.mode === "magic_link"
+        ? listFavorites(repository, request, slug)
+        : Promise.resolve(null),
+    ]);
+
+    if (galleryResult.ok) {
+      initialPage = galleryResult.page;
+    }
+    if (favoritesResult && favoritesResult.ok) {
+      initialFavoriteIds = favoritesResult.favorites.photoIds;
+    }
   }
 
-  const album: GalleryAlbum = {
-    slug: share.albumSlug,
-    title: share.albumTitle,
-    photoCount: share.photoCount,
-    branding: share.albumBranding,
-    photographerName: share.photographerName,
-  };
+  const state: GalleryState = { access, album, policy };
 
-  const policy: SharePolicy = {
-    mode: share.mode,
-    allowDownload: share.allowDownload,
-    allowedQualities: share.allowedQualities,
-    stripMetadata: resolveStripMetadata(share, share.organizationStripMetadata),
-    expiresAt: share.expiresAt?.toISOString() ?? null,
-  };
+  if (access !== "ok") {
+    return (
+      <ShareAccessGate
+        slug={slug}
+        access={access}
+        initialToken={initialToken}
+      />
+    );
+  }
 
-  const [galleryResult, favoritesResult] = await Promise.all([
-    listShareGallery(repository, request, slug, new URLSearchParams({ filter: "all", limit: "50" })),
-    share.mode === "magic_link"
-      ? listFavorites(repository, request, slug)
-      : Promise.resolve(null),
-  ]);
-
-  return {
-    state: { access, album, policy },
-    initialPage: galleryResult.ok ? galleryResult.page : emptyPage,
-    initialFavoriteIds: favoritesResult && favoritesResult.ok ? favoritesResult.favorites.photoIds : [],
-  };
-}
-
-export default async function SharePage({ params, searchParams }: PageProps) {
-  await connection();
-
-  const [{ slug }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const initialToken =
-    typeof resolvedSearchParams.token === "string" ? resolvedSearchParams.token : null;
-
-  const { state, initialPage, initialFavoriteIds } = await loadSharePayload(slug);
-  const brandTitle = state.album?.branding?.title?.trim() || "Potokuadrat";
-  const brandAccent = state.album?.branding?.accent?.trim();
-  const brandStyle = brandAccent
-    ? ({ "--brand-accent": brandAccent } as CSSProperties)
-    : undefined;
+  if (!album) {
+    notFound();
+  }
 
   return (
-    <main className="folio-frame" style={brandStyle}>
-      <header className="site-navbar">
-        <div className="navbar-inner">
-          <Link className="navbar-brand" href="/" aria-label={brandTitle}>
-            <span className="brand-stamp" aria-hidden="true">
-              {brandTitle.charAt(0).toUpperCase()}
-            </span>
-            <span>{brandTitle}</span>
-          </Link>
-
-          {state.album?.photographerName && (
-            <div className="navbar-actions">
-              <span className="navbar-user">{state.album.photographerName}</span>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <div className="folio-page">
-        {state.access !== "ok" || !state.album || !state.policy ? (
-          <ShareAccessGate
-            slug={slug}
-            access={state.access === "ok" ? "unavailable" : state.access}
-            initialToken={initialToken}
-          />
-        ) : (
-          <ShareGallery
-            slug={slug}
-            album={state.album}
-            policy={state.policy}
-            initialPage={initialPage}
-            initialFavoriteIds={initialFavoriteIds}
-          />
-        )}
-      </div>
-    </main>
+    <GalleryView
+      slug={slug}
+      state={state}
+      initialPage={initialPage}
+      initialFavoriteIds={initialFavoriteIds}
+    />
   );
 }
