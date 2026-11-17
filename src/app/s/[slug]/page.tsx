@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { connection } from "next/server";
 
-import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
 import type { PhotoPage } from "@/contracts/album";
+import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
 import { GalleryView } from "@/features/gallery/gallery-view";
 import { ShareAccessGate } from "@/features/gallery/share-access-gate";
 import { resolveShareAccess } from "@/server/shares/access";
@@ -21,7 +21,9 @@ type Context = {
   searchParams: Promise<{ token?: string | string[] }>;
 };
 
-export async function generateMetadata({ params }: Pick<Context, "params">): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: Pick<Context, "params">): Promise<Metadata> {
   await connection();
   const { slug } = await params;
   const repository = getShareRepository();
@@ -51,10 +53,8 @@ export default async function ShareGalleryPage({ params, searchParams }: Context
     notFound();
   }
 
-  const cookieHeader = (await headers()).get("cookie");
-  const request = new Request("http://localhost", {
-    headers: cookieHeader ? { cookie: cookieHeader } : {},
-  });
+  const reqHeaders = await headers();
+  const request = new Request("http://localhost", { headers: reqHeaders });
 
   const authorization = await authorizeShareRequest(repository, request, share);
   const access = resolveShareAccess(share, new Date(), authorization.authorized);
