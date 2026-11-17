@@ -1,19 +1,48 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useSyncExternalStore } from "react";
+import type { FavoritesResponse } from "@/contracts/share";
 import type { Photo, PhotoFilter, PhotoPage, GalleryState } from "./types";
 import { FolioSpine } from "./folio-spine";
 import { FilterBar } from "./filter-bar";
 import { PhotoCard } from "./photo-card";
 import { Lightbox } from "./lightbox";
 
+const LOCAL_FAV_EVENT = "potokuadrat:gallery-favs-change";
+
+function subscribeLocalFavs(callback: () => void): () => void {
+  window.addEventListener("storage", callback);
+  window.addEventListener(LOCAL_FAV_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(LOCAL_FAV_EVENT, callback);
+  };
+}
+
+function parseStoredIds(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface GalleryViewProps {
   slug: string;
   state: GalleryState;
   initialPage: PhotoPage;
+  initialFavoriteIds?: string[];
 }
 
-export function GalleryView({ slug, state, initialPage }: GalleryViewProps) {
+export function GalleryView({
+  slug,
+  state,
+  initialPage,
+  initialFavoriteIds = [],
+}: GalleryViewProps) {
   const [photos, setPhotos] = useState<Photo[]>(initialPage.photos);
   const [nextCursor, setNextCursor] = useState<string | null>(
     initialPage.nextCursor,
@@ -21,46 +50,56 @@ export function GalleryView({ slug, state, initialPage }: GalleryViewProps) {
   const [activeFilter, setActiveFilter] = useState<PhotoFilter>("all");
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [serverFavIds, setServerFavIds] = useState<string[]>(initialFavoriteIds);
 
-  // Lazy-initialize favorites from localStorage to prevent synchronous setState in effect
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const stored = localStorage.getItem(`pk_favs_${slug}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return new Set(parsed);
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-    return new Set();
-  });
+  const isMagicLink = state.policy?.mode === "magic_link";
 
-  // Save favorites to localStorage
+  const localRaw = useSyncExternalStore(
+    subscribeLocalFavs,
+    () => window.localStorage.getItem(`pk_favs_${slug}`) ?? "[]",
+    () => "[]",
+  );
+
+  const favorites = useMemo(
+    () => new Set(isMagicLink ? serverFavIds : parseStoredIds(localRaw)),
+    [isMagicLink, localRaw, serverFavIds],
+  );
+
   const toggleFavorite = useCallback(
-    (photoId: string) => {
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (next.has(photoId)) {
-          next.delete(photoId);
-        } else {
-          next.add(photoId);
-        }
+    async (photoId: string) => {
+      const isFav = favorites.has(photoId);
+      const next = isFav
+        ? Array.from(favorites).filter((id) => id !== photoId)
+        : [...Array.from(favorites), photoId];
+
+      if (!isMagicLink) {
         try {
-          localStorage.setItem(
-            `pk_favs_${slug}`,
-            JSON.stringify(Array.from(next)),
-          );
+          window.localStorage.setItem(`pk_favs_${slug}`, JSON.stringify(next));
+          window.dispatchEvent(new Event(LOCAL_FAV_EVENT));
         } catch {
-          // Ignore
+          // Ignore storage quota errors
         }
-        return next;
-      });
+        return;
+      }
+
+      const prevIds = serverFavIds;
+      setServerFavIds(next);
+      try {
+        const res = await fetch(
+          `/api/share/${encodeURIComponent(slug)}/favorites/${encodeURIComponent(photoId)}`,
+          { method: isFav ? "DELETE" : "PUT" },
+        );
+        if (!res.ok) {
+          setServerFavIds(prevIds);
+          return;
+        }
+        const data = (await res.json()) as FavoritesResponse;
+        setServerFavIds(data.photoIds);
+      } catch {
+        setServerFavIds(prevIds);
+      }
     },
-    [slug],
+    [favorites, isMagicLink, serverFavIds, slug],
   );
 
   // Filter photos

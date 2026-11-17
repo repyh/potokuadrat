@@ -41,7 +41,7 @@ export function FilterBar({
             onClick={() => onFilterChange(filter)}
             className={`shrink-0 px-3 py-1.5 transition-colors border text-xs ${
               isActive
-                ? "bg-[var(--accent)] text-[var(--ink)] font-bold border-[var(--accent)] shadow-xs"
+                ? "bg-[var(--ink)] text-[var(--paper)] font-bold border-[var(--ink)] shadow-xs"
                 : "bg-transparent text-[var(--quiet)] border-[var(--line)] hover:bg-[var(--ground)] hover:text-[var(--ink)]"
             }`}
           >

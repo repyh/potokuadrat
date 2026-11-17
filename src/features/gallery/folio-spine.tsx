@@ -29,7 +29,10 @@ export function FolioSpine({
   };
 
   const allowDownload = policy?.allowDownload ?? true;
-  const downloadUrl = `/api/share/${encodeURIComponent(slug)}/download.zip`;
+  const preferredQuality = policy?.allowedQualities.includes("original")
+    ? "original"
+    : (policy?.allowedQualities[0] ?? "original");
+  const downloadUrl = `/api/share/${encodeURIComponent(slug)}/download.zip?quality=${preferredQuality}`;
 
   return (
     <aside
