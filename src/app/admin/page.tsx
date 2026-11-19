@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { count } from "drizzle-orm";
 
 import { Alert } from "@/components/ui";
+import { NoAlbumsEmptyState } from "@/features/states";
 import { requireAdmin } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { albums, organizations, shares } from "@/server/db/schema";
@@ -22,6 +24,9 @@ export default async function AdminPage() {
   const [albumCount] = await db.select({ value: count() }).from(albums);
   const [shareCount] = await db.select({ value: count() }).from(shares);
 
+  const numAlbums = Number(albumCount?.value ?? 0);
+  const numShares = Number(shareCount?.value ?? 0);
+
   return (
     <section className="admin-section" aria-labelledby="admin-heading">
       <p className="hero-eyebrow">Organizer</p>
@@ -37,23 +42,39 @@ export default async function AdminPage() {
         </Alert>
       )}
 
-      <div className="admin-grid">
+      <div className="admin-grid mb-8">
         <article className="admin-card">
           <h2>Albums</h2>
           <p>
-            {Number(albumCount?.value ?? 0) === 0
-              ? "No albums yet. Album creation arrives with the indexing phase."
-              : `${albumCount?.value} albums.`}
+            {numAlbums === 0
+              ? "No albums yet. Link a Drive folder to index photographs."
+              : `${numAlbums} active ${numAlbums === 1 ? "album" : "albums"}.`}
           </p>
+          <div className="mt-4">
+            <Link
+              href="/admin/albums"
+              className="text-xs font-bold text-[var(--ink)] hover:text-[var(--accent)] underline"
+            >
+              Browse albums →
+            </Link>
+          </div>
         </article>
 
         <article className="admin-card">
           <h2>Shares</h2>
           <p>
-            {Number(shareCount?.value ?? 0) === 0
+            {numShares === 0
               ? "No share links yet. Every album can have several."
-              : `${shareCount?.value} share links.`}
+              : `${numShares} active ${numShares === 1 ? "share" : "shares"}.`}
           </p>
+          <div className="mt-4">
+            <Link
+              href="/admin/shares"
+              className="text-xs font-bold text-[var(--ink)] hover:text-[var(--accent)] underline"
+            >
+              Manage shares →
+            </Link>
+          </div>
         </article>
 
         <article className="admin-card">
@@ -63,8 +84,22 @@ export default async function AdminPage() {
             <code>GOOGLE_DRIVE_KEY_FILE</code>. Folders must be shared with that
             account.
           </p>
+          <div className="mt-4">
+            <Link
+              href="/admin/settings"
+              className="text-xs font-bold text-[var(--ink)] hover:text-[var(--accent)] underline"
+            >
+              View Drive status →
+            </Link>
+          </div>
         </article>
       </div>
+
+      {numAlbums === 0 && (
+        <div className="mt-8 border-t border-[var(--line)] pt-8">
+          <NoAlbumsEmptyState />
+        </div>
+      )}
     </section>
   );
 }
