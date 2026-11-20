@@ -19,7 +19,7 @@ export function RecentAlbumsList({ albums }: RecentAlbumsListProps) {
   const router = useRouter();
 
   return (
-    <div className="specimen-ruled-stack">
+    <div>
       {albums.map((album) => (
         <DocumentRow
           key={album.id}
