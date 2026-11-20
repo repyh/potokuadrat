@@ -1,0 +1,767 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+
+import type {
+  AlbumDetail,
+  AlbumFolderInput,
+  DriveFolderOption,
+  DriveFoldersResponse,
+} from "@/contracts/admin";
+import type {
+  DownloadQuality,
+  IssuedMagicLink,
+  ShareMode,
+  ShareSummary,
+} from "@/contracts/share";
+import { deleteAlbumAction, updateAlbumAction } from "@/app/admin/albums/actions";
+import { createShareAction, deleteShareAction } from "@/app/admin/shares/actions";
+import {
+  Alert,
+  Breadcrumbs,
+  Button,
+  Checkbox,
+  DataTable,
+  Dialog,
+  EmptyState,
+  Field,
+  Fieldset,
+  Input,
+  ProgressBar,
+  RadioGroup,
+  Select,
+  Switch,
+} from "@/components/ui";
+
+export interface AlbumDetailViewProps {
+  detail: AlbumDetail;
+  shares: ShareSummary[];
+}
+
+const MODE_LABELS: Record<ShareMode, string> = {
+  public: "Public",
+  password: "Password",
+  magic_link: "Magic link",
+};
+
+function extractDriveFolderId(raw: string): string {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return match?.[1] ?? trimmed;
+}
+
+export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
+  const router = useRouter();
+  const { album, folders, progress } = detail;
+
+  const [title, setTitle] = useState(album.title);
+  const [savingTitle, setSavingTitle] = useState(false);
+
+  const [driveFolders, setDriveFolders] = useState<AlbumFolderInput[]>(() =>
+    folders.map((f) => ({
+      driveFolderId: f.driveFolderId,
+      name: f.name,
+      recursive: f.recursive,
+    })),
+  );
+  const [foldersDirty, setFoldersDirty] = useState(false);
+  const [discoveredFolders, setDiscoveredFolders] = useState<DriveFolderOption[]>([]);
+  const [loadingDriveFolders, setLoadingDriveFolders] = useState(false);
+  const [selectedDiscoveredId, setSelectedDiscoveredId] = useState("");
+  const [pastedFolderInput, setPastedFolderInput] = useState("");
+  const [savingFolders, setSavingFolders] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingAlbum, setDeletingAlbum] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    tone: "success" | "danger";
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareMode, setShareMode] = useState<ShareMode>("public");
+  const [sharePassword, setSharePassword] = useState("");
+  const [shareRecipients, setShareRecipients] = useState("");
+  const [allowDownload, setAllowDownload] = useState(true);
+  const [allowOriginal, setAllowOriginal] = useState(true);
+  const [creatingShare, setCreatingShare] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [issuedLinks, setIssuedLinks] = useState<IssuedMagicLink[]>([]);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Copy failed",
+        message: "Clipboard access was blocked by this browser.",
+      });
+    }
+  };
+
+  const handleSaveTitle = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (savingTitle || !title.trim()) {
+      return;
+    }
+
+    setSavingTitle(true);
+    setFeedback(null);
+    const result = await updateAlbumAction(album.id, { title: title.trim() });
+    setSavingTitle(false);
+
+    if (!result.ok) {
+      setFeedback({ tone: "danger", title: "Update failed", message: result.error });
+      return;
+    }
+
+    setFeedback({ tone: "success", title: "Album updated", message: "Title saved." });
+    router.refresh();
+  };
+
+  const handleLoadDriveFolders = async () => {
+    if (loadingDriveFolders) {
+      return;
+    }
+    setLoadingDriveFolders(true);
+    setFeedback(null);
+
+    try {
+      const res = await fetch("/api/admin/drive/folders");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setFeedback({
+          tone: "danger",
+          title: "Folder discovery failed",
+          message: body?.error ?? "Unable to list shared Drive folders.",
+        });
+        return;
+      }
+
+      const data = (await res.json()) as DriveFoldersResponse;
+      setDiscoveredFolders(data.folders);
+      if (data.folders[0]) {
+        setSelectedDiscoveredId(data.folders[0].id);
+      } else {
+        setFeedback({
+          tone: "danger",
+          title: "No folders found",
+          message: "No folders are shared with the service account yet.",
+        });
+      }
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Folder discovery failed",
+        message: "Network error while loading Drive folders.",
+      });
+    } finally {
+      setLoadingDriveFolders(false);
+    }
+  };
+
+  const handleAddFolder = (folderId: string, folderName?: string) => {
+    const cleanId = extractDriveFolderId(folderId);
+    if (!cleanId) {
+      return;
+    }
+    if (driveFolders.some((f) => f.driveFolderId === cleanId)) {
+      setFeedback({
+        tone: "danger",
+        title: "Duplicate folder",
+        message: "That Google Drive folder is already linked to this album.",
+      });
+      return;
+    }
+
+    setDriveFolders((prev) => [
+      ...prev,
+      { driveFolderId: cleanId, name: folderName || cleanId, recursive: true },
+    ]);
+    setFoldersDirty(true);
+    setPastedFolderInput("");
+  };
+
+  const handleSaveDriveFolders = async () => {
+    if (savingFolders || driveFolders.length === 0) {
+      return;
+    }
+
+    setSavingFolders(true);
+    setFeedback(null);
+    const result = await updateAlbumAction(album.id, { folders: driveFolders });
+    setSavingFolders(false);
+
+    if (!result.ok) {
+      setFeedback({ tone: "danger", title: "Save failed", message: result.error });
+      return;
+    }
+
+    setFoldersDirty(false);
+    setFeedback({
+      tone: "success",
+      title: "Google Drive folders saved",
+      message: "Updated linked folders and queued a full re-index.",
+    });
+    router.refresh();
+  };
+
+  const handleReindex = async () => {
+    if (reindexing) {
+      return;
+    }
+
+    setReindexing(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/admin/albums/${encodeURIComponent(album.id)}/reindex`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setFeedback({
+          tone: "danger",
+          title: "Re-index failed",
+          message: body?.error ?? "Unable to queue re-index.",
+        });
+        return;
+      }
+
+      setFeedback({
+        tone: "success",
+        title: "Re-index queued",
+        message: "The worker will scan linked Drive folders shortly.",
+      });
+      router.refresh();
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Re-index failed",
+        message: "Network error while queuing re-index.",
+      });
+    } finally {
+      setReindexing(false);
+    }
+  };
+
+  const handleDeleteAlbum = async () => {
+    if (deletingAlbum) {
+      return;
+    }
+    setDeletingAlbum(true);
+    const result = await deleteAlbumAction(album.id);
+    setDeletingAlbum(false);
+
+    if (!result.ok) {
+      setDeleteDialogOpen(false);
+      setFeedback({ tone: "danger", title: "Delete failed", message: result.error });
+      return;
+    }
+
+    router.push("/admin/albums");
+    router.refresh();
+  };
+
+  const handleCreateShare = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (creatingShare) {
+      return;
+    }
+
+    const allowedQualities: DownloadQuality[] = allowOriginal
+      ? ["original", "web"]
+      : ["web"];
+
+    const recipients =
+      shareMode === "magic_link"
+        ? shareRecipients
+            .split(/[\n,]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+
+    setCreatingShare(true);
+    setShareError(null);
+
+    const result = await createShareAction(album.id, {
+      mode: shareMode,
+      allowDownload,
+      allowedQualities,
+      password: shareMode === "password" ? sharePassword : undefined,
+      recipients,
+    });
+
+    setCreatingShare(false);
+
+    if (!result.ok) {
+      setShareError(result.error);
+      return;
+    }
+
+    setIssuedLinks(result.data.links);
+    setShareDialogOpen(false);
+    setSharePassword("");
+    setShareRecipients("");
+    setFeedback({
+      tone: "success",
+      title: "Share link created",
+      message: `Share /s/${result.data.share.slug} is ready.`,
+    });
+    router.refresh();
+  };
+
+  const handleRevokeShare = async (shareId: string) => {
+    const result = await deleteShareAction(shareId);
+    if (!result.ok) {
+      setFeedback({ tone: "danger", title: "Revoke failed", message: result.error });
+      return;
+    }
+    setFeedback({
+      tone: "success",
+      title: "Share revoked",
+      message: "The share link has been deleted.",
+    });
+    router.refresh();
+  };
+
+  return (
+    <section className="admin-page" aria-labelledby="album-detail-heading">
+      <Breadcrumbs
+        items={[
+          { label: "Albums", href: "/admin/albums" },
+          { label: album.title },
+        ]}
+      />
+
+      <header className="admin-page-header">
+        <div>
+          <h1 id="album-detail-heading">{album.title}</h1>
+          <p className="auth-lede">
+            <span className="tabular-nums">{album.photoCount}</span> photos · /{album.slug}
+          </p>
+        </div>
+      </header>
+
+      {feedback && (
+        <Alert
+          tone={feedback.tone}
+          title={feedback.title}
+          onDismiss={() => setFeedback(null)}
+        >
+          {feedback.message}
+        </Alert>
+      )}
+
+      {issuedLinks.length > 0 && (
+        <Alert
+          tone="success"
+          title="Copy one-time magic links now"
+          onDismiss={() => setIssuedLinks([])}
+        >
+          <div className="admin-dialog-stack">
+            {issuedLinks.map((link) => (
+              <div key={link.recipientId} className="specimen-inline-cluster">
+                <span>{link.email}:</span>
+                <code>{link.url}</code>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleCopy(link.recipientId, link.url)}
+                >
+                  {copiedKey === link.recipientId ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Alert>
+      )}
+
+      <Fieldset
+        legend="Album Details"
+        description="Update the display title for this album."
+      >
+        <form onSubmit={handleSaveTitle} className="admin-dialog-stack" noValidate>
+          <div className="specimen-form-grid">
+            <Field htmlFor="detail-album-title" label="Album title">
+              <Input
+                id="detail-album-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={savingTitle}
+                required
+              />
+            </Field>
+          </div>
+          <div>
+            <Button type="submit" variant="secondary" loading={savingTitle}>
+              Save title
+            </Button>
+          </div>
+        </form>
+      </Fieldset>
+
+      <Fieldset
+        legend="Google Drive"
+        description="Manage linked Google Drive folders, subfolder recursion, and indexing."
+      >
+        <ProgressBar
+          label="Indexed thumbnails"
+          value={progress.ready}
+          max={Math.max(1, progress.total)}
+        />
+
+        {driveFolders.length > 0 && (
+          <div className="admin-folder-list">
+            {driveFolders.map((folder) => (
+              <div key={folder.driveFolderId} className="admin-folder-row">
+                <div className="admin-table-primary">
+                  <strong>{folder.name || folder.driveFolderId}</strong>
+                  <span className="admin-table-sub">{folder.driveFolderId}</span>
+                </div>
+
+                <Checkbox
+                  id={`recursive-${folder.driveFolderId}`}
+                  checked={folder.recursive ?? true}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDriveFolders((prev) =>
+                      prev.map((item) =>
+                        item.driveFolderId === folder.driveFolderId
+                          ? { ...item, recursive: checked }
+                          : item,
+                      ),
+                    );
+                    setFoldersDirty(true);
+                  }}
+                  label="Include subfolders"
+                />
+
+                {driveFolders.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setDriveFolders((prev) =>
+                        prev.filter((item) => item.driveFolderId !== folder.driveFolderId),
+                      );
+                      setFoldersDirty(true);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Field
+          htmlFor="detail-paste-folder"
+          label="Add Drive folder by ID or URL"
+        >
+          <div className="admin-input-row">
+            <Input
+              id="detail-paste-folder"
+              value={pastedFolderInput}
+              onChange={(e) => setPastedFolderInput(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+            />
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={!pastedFolderInput.trim()}
+              onClick={() => handleAddFolder(pastedFolderInput)}
+            >
+              Add folder
+            </Button>
+          </div>
+        </Field>
+
+        <Field
+          htmlFor="detail-discovered-folder"
+          label="Shared folders"
+        >
+          {discoveredFolders.length > 0 ? (
+            <div className="admin-input-row">
+              <Select
+                id="detail-discovered-folder"
+                value={selectedDiscoveredId}
+                onChange={(e) => setSelectedDiscoveredId(e.target.value)}
+                options={discoveredFolders.map((f) => ({
+                  value: f.id,
+                  label: f.name,
+                }))}
+              />
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  const chosen = discoveredFolders.find(
+                    (f) => f.id === selectedDiscoveredId,
+                  );
+                  if (chosen) {
+                    handleAddFolder(chosen.id, chosen.name);
+                  }
+                }}
+              >
+                Add selected
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={loadingDriveFolders}
+                onClick={() => void handleLoadDriveFolders()}
+              >
+                Load shared folders
+              </Button>
+            </div>
+          )}
+        </Field>
+
+        <div className="specimen-inline-cluster">
+          <Button
+            variant="secondary"
+            loading={savingFolders}
+            disabled={!foldersDirty || driveFolders.length === 0}
+            onClick={() => void handleSaveDriveFolders()}
+          >
+            Save Drive folders
+          </Button>
+          <Button
+            variant="ghost"
+            loading={reindexing}
+            onClick={() => void handleReindex()}
+          >
+            Re-index now
+          </Button>
+        </div>
+      </Fieldset>
+
+      <Fieldset
+        legend="Share Links"
+        description="Create public, password-protected, or one-time magic-link folios for clients."
+      >
+        <div className="specimen-inline-cluster">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setShareError(null);
+              setShareDialogOpen(true);
+            }}
+          >
+            New share link
+          </Button>
+        </div>
+
+        {shares.length === 0 ? (
+          <EmptyState
+            title="No share links yet"
+            description="Create a share link to deliver this album to guests."
+          />
+        ) : (
+          <DataTable
+            rowKeyField="id"
+            columns={[
+              { key: "slug", header: "Link" },
+              { key: "mode", header: "Access" },
+              { key: "downloads", header: "Downloads" },
+              { key: "actions", header: "Actions", numeric: true },
+            ]}
+            rows={shares.map((share) => {
+              const path = `/s/${share.slug}`;
+              return {
+                id: share.id,
+                slug: <code>{path}</code>,
+                mode: MODE_LABELS[share.mode],
+                downloads: share.allowDownload
+                  ? share.allowedQualities.join(", ")
+                  : "Disabled",
+                actions: (
+                  <div className="admin-table-actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        void handleCopy(
+                          share.id,
+                          `${window.location.origin}${path}`,
+                        )
+                      }
+                    >
+                      {copiedKey === share.id ? "Copied" : "Copy URL"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(path)}
+                    >
+                      Open →
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => void handleRevokeShare(share.id)}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                ),
+              };
+            })}
+          />
+        )}
+      </Fieldset>
+
+      <Fieldset
+        legend="Danger Zone"
+        description="Permanently delete this album, its indexed photo records, and all share links. Google Drive source files are never modified."
+      >
+        <div>
+          <Button
+            variant="danger"
+            size="md"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            Delete album
+          </Button>
+        </div>
+      </Fieldset>
+
+      <Dialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        title="New share link"
+        description="Choose how clients access and download this folio."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShareDialogOpen(false)}
+              disabled={creatingShare}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="create-share-form"
+              variant="primary"
+              loading={creatingShare}
+            >
+              Create share
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="create-share-form"
+          onSubmit={handleCreateShare}
+          className="admin-dialog-stack"
+          noValidate
+        >
+          {shareError && (
+            <Alert tone="danger" title="Could not create share">
+              {shareError}
+            </Alert>
+          )}
+
+          <RadioGroup
+            name="share-mode"
+            legend="Access mode"
+            value={shareMode}
+            onChange={(val) => setShareMode(val as ShareMode)}
+            options={[
+              { value: "public", label: "Public link" },
+              { value: "password", label: "Password protected" },
+              { value: "magic_link", label: "One-time magic link" },
+            ]}
+          />
+
+          {shareMode === "password" && (
+            <Field htmlFor="create-share-password" label="Share password">
+              <Input
+                id="create-share-password"
+                type="password"
+                value={sharePassword}
+                onChange={(e) => setSharePassword(e.target.value)}
+                required
+                placeholder="At least 4 characters"
+              />
+            </Field>
+          )}
+
+          {shareMode === "magic_link" && (
+            <Field
+              htmlFor="create-share-recipients"
+              label="Recipient emails"
+              hint="Comma or newline separated."
+            >
+              <Input
+                id="create-share-recipients"
+                value={shareRecipients}
+                onChange={(e) => setShareRecipients(e.target.value)}
+                placeholder="guest@example.com"
+              />
+            </Field>
+          )}
+
+          <Switch
+            id="share-allow-download"
+            checked={allowDownload}
+            onChange={setAllowDownload}
+            label="Allow photo and ZIP downloads"
+          />
+
+          {allowDownload && (
+            <Switch
+              id="share-allow-original"
+              checked={allowOriginal}
+              onChange={setAllowOriginal}
+              label="Include original-resolution downloads"
+              description="When off, guests can download Web 2048px copies only."
+            />
+          )}
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        title="Delete album?"
+        description="This permanently removes the album, indexed photo records, and all share links."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deletingAlbum}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deletingAlbum}
+              onClick={() => void handleDeleteAlbum()}
+            >
+              Delete album
+            </Button>
+          </>
+        }
+      >
+        <p className="admin-empty-copy">
+          Google Drive source files are never modified or deleted.
+        </p>
+      </Dialog>
+    </section>
+  );
+}
