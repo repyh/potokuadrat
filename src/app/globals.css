@@ -2550,6 +2550,10 @@ select {
   line-height: 1.04;
 }
 
+.admin-page .specimen-form-grid {
+  align-items: start;
+}
+
 .admin-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2708,7 +2712,49 @@ select {
 
 .admin-settings-sections {
   display: grid;
-  gap: 12px;
+  gap: 20px;
+  min-width: 0;
+}
+
+.admin-settings-panel {
+  display: grid;
+  gap: 24px;
+  padding-top: 8px;
+}
+
+.admin-settings-panel[hidden] {
+  display: none;
+}
+
+.admin-settings-intro {
+  margin: 0;
+  max-width: 72ch;
+  text-wrap: pretty;
+  color: var(--quiet);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.admin-settings-actions {
+  padding-top: 4px;
+}
+
+.admin-account-group {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-account-group.is-separated {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-subsection-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--ink);
 }
 
 .admin-settings-row {
@@ -2746,6 +2792,22 @@ select {
 @media (max-width: 920px) {
   .admin-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .admin-page .ui-tablist {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .admin-page .ui-tablist::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-page .ui-tab {
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
 
   .admin-spine {
@@ -2773,7 +2835,11 @@ select {
     padding-top: 14px;
   }
 
-  .admin-metrics {
+  .admin-page .specimen-form-grid {
+  align-items: start;
+}
+
+.admin-metrics {
     grid-template-columns: 1fr;
   }
 
