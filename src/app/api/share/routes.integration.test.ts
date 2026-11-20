@@ -1,5 +1,13 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+const SEED_MEDIA_DIR = "/tmp/potokuadrat-test-seed-media";
+const SEED_JPEG = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0xff, 0xd9,
+]);
 
 /**
  * Exercises the public share route handlers over HTTP semantics: status codes, body
@@ -143,6 +151,12 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
     // seeded photos never stream from Drive, so a path is all it needs.
     process.env.GOOGLE_DRIVE_KEY_FILE = "/nonexistent/service-account.json";
     process.env.THUMB_CACHE_DIR = "/tmp/potokuadrat-test-thumbs";
+    // Seed media comes from the local cache, so the suite never touches Unsplash.
+    process.env.SEED_MEDIA_DIR = SEED_MEDIA_DIR;
+    await mkdir(SEED_MEDIA_DIR, { recursive: true });
+    for (const width of [400, 1600, 2048]) {
+      await writeFile(join(SEED_MEDIA_DIR, `seed-photo-01-${width}.jpg`), SEED_JPEG);
+    }
 
     const dbModule = await import("@/server/db/client");
     db = dbModule.getDb();
@@ -167,6 +181,7 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
   afterAll(async () => {
     await resetDatabase();
     await closeDb();
+    await rm(SEED_MEDIA_DIR, { recursive: true, force: true });
   });
 
   describe("GET /api/share/[slug]", () => {
@@ -585,8 +600,9 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
       );
 
       expect(first.status).toBe(200);
-      expect(first.headers.get("content-type")).toBe("image/svg+xml");
+      expect(first.headers.get("content-type")).toBe("image/jpeg");
       expect(first.headers.get("cache-control")).toMatch(/immutable/);
+      expect(Buffer.from(await first.arrayBuffer()).equals(SEED_JPEG)).toBe(true);
 
       const etag = first.headers.get("etag");
       expect(etag).toBeTruthy();
@@ -636,13 +652,13 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")).toBe("image/svg+xml");
-      // The local seed serves SVG placeholder bytes, and the route keeps that
-      // extension so the zip entry and the download agree.
+      expect(response.headers.get("content-type")).toBe("image/jpeg");
+      // The local seed serves the cached JPEG, and the route keeps that extension so
+      // the zip entry and the download agree.
       expect(response.headers.get("content-disposition")).toBe(
-        'attachment; filename="Seed.svg"',
+        'attachment; filename="Seed.jpg"',
       );
-      expect(await response.text()).toContain("<svg");
+      expect(Buffer.from(await response.arrayBuffer()).equals(SEED_JPEG)).toBe(true);
     });
 
     it("rejects an unknown quality", async () => {

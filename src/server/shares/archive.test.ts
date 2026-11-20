@@ -148,11 +148,11 @@ describe("entry names", () => {
     expect(entryNameFor(photo(), "web")).toBe("TOP2-2048.jpg");
   });
 
-  it("names development seed entries as SVG", () => {
+  it("names development seed entries as JPEG", () => {
     const seed = photo({ driveFileId: "seed-photo-01", name: "Seed Photo 01.jpg" });
 
-    expect(entryNameFor(seed, "original")).toBe("Seed Photo 01.svg");
-    expect(entryNameFor(seed, "web")).toBe("Seed Photo 01-2048.svg");
+    expect(entryNameFor(seed, "original")).toBe("Seed Photo 01.jpg");
+    expect(entryNameFor(seed, "web")).toBe("Seed Photo 01-2048.jpg");
   });
 
   it("suffixes repeated filenames so every photo lands in the archive", () => {
