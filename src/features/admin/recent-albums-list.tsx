@@ -28,7 +28,7 @@ export function RecentAlbumsList({ albums }: RecentAlbumsListProps) {
           title={album.title}
           fileSize={`/${album.slug}`}
           readingTime={`${album.photoCount} photos`}
-          onOpen={() => router.push(`/s/${encodeURIComponent(album.slug)}`)}
+          onOpen={() => router.push(`/admin/albums/${encodeURIComponent(album.id)}`)}
         />
       ))}
     </div>
