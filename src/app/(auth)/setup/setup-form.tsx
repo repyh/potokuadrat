@@ -22,13 +22,21 @@ export function SetupForm() {
           id="organizationName"
           name="organizationName"
           autoComplete="organization"
+          defaultValue={state.fields?.organizationName}
           required
           disabled={pending}
         />
       </Field>
 
       <Field htmlFor="name" label="Your name">
-        <Input id="name" name="name" autoComplete="name" required disabled={pending} />
+        <Input
+          id="name"
+          name="name"
+          autoComplete="name"
+          defaultValue={state.fields?.name}
+          required
+          disabled={pending}
+        />
       </Field>
 
       <Field htmlFor="email" label="Email" hint="Used to sign in to the organizer area.">
@@ -37,6 +45,7 @@ export function SetupForm() {
           name="email"
           type="email"
           autoComplete="email"
+          defaultValue={state.fields?.email}
           required
           disabled={pending}
         />

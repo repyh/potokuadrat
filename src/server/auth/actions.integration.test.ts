@@ -32,10 +32,13 @@ function setupForm(): FormData {
   return formData;
 }
 
-function loginForm(email: string, password: string): FormData {
+function loginForm(email: string, password: string, redirectTo?: string): FormData {
   const formData = new FormData();
   formData.set("email", email);
   formData.set("password", password);
+  if (redirectTo !== undefined) {
+    formData.set("redirectTo", redirectTo);
+  }
   return formData;
 }
 
@@ -93,9 +96,53 @@ describe.skipIf(!databaseUrl)("setup and login actions", () => {
   it("rejects a wrong password and redirects on the right one", async () => {
     const failure = await loginAction({}, loginForm(admin.email, "wrong password"));
     expect(failure.error).toMatch(/invalid email or password/i);
+    expect(failure.fields?.email).toBe(admin.email);
 
     await expect(loginAction({}, loginForm(admin.email, admin.password))).rejects.toMatchObject({
       digest: expect.stringContaining("NEXT_REDIRECT"),
     });
+  });
+
+  it("redirects to the requested same-origin path", async () => {
+    await expect(
+      loginAction({}, loginForm(admin.email, admin.password, "/admin/albums?view=grid")),
+    ).rejects.toMatchObject({
+      digest: "NEXT_REDIRECT;replace;/admin/albums?view=grid;307;",
+    });
+  });
+
+  it("ignores redirect targets that leave the origin", async () => {
+    const unsafeTargets = [
+      "//evil.example",
+      "/\\evil.example",
+      "/\\/evil.example",
+      "https://evil.example",
+      " /\\evil.example",
+      "/..//evil.example",
+    ];
+
+    for (const target of unsafeTargets) {
+      await expect(
+        loginAction({}, loginForm(admin.email, admin.password, target)),
+        `target ${JSON.stringify(target)}`,
+      ).rejects.toMatchObject({
+        digest: "NEXT_REDIRECT;replace;/admin;307;",
+      });
+    }
+  });
+
+  it("rejects a member account without leaving a session behind", async () => {
+    await db.execute(sql`UPDATE users SET role = 'member'`);
+    await db.execute(sql`DELETE FROM sessions`);
+
+    const state = await loginAction({}, loginForm(admin.email, admin.password));
+
+    expect(state.error).toMatch(/organizer access/i);
+    expect(state.fields?.email).toBe(admin.email);
+
+    const sessions = await db.execute<{ id: string }>(sql`SELECT id FROM sessions`);
+    expect(sessions.rows).toEqual([]);
+
+    await db.execute(sql`UPDATE users SET role = 'admin'`);
   });
 });
