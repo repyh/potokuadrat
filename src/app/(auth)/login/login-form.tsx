@@ -26,7 +26,6 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           type="email"
           autoComplete="email"
           defaultValue={state.fields?.email}
-          invalid={Boolean(state.error)}
           required
           disabled={pending}
         />
@@ -38,7 +37,6 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           name="password"
           type="password"
           autoComplete="current-password"
-          invalid={Boolean(state.error)}
           required
           disabled={pending}
         />

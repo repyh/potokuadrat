@@ -17,15 +17,39 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const REDIRECT_BASE = "http://internal";
+
+/**
+ * Only same-origin paths may be used as a post-login destination. Parsing with a
+ * base URL rejects protocol-relative, absolute, and backslash-smuggled targets,
+ * which a prefix check alone misses.
+ */
 function safeRedirectPath(raw: FormDataEntryValue | null): string {
   if (typeof raw !== "string") {
     return "/admin";
   }
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+  const candidate = raw.trim();
+  if (!candidate.startsWith("/")) {
     return "/admin";
   }
-  return trimmed;
+  try {
+    const target = new URL(candidate, REDIRECT_BASE);
+    if (target.origin !== REDIRECT_BASE || target.pathname.startsWith("//")) {
+      return "/admin";
+    }
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return "/admin";
+  }
+}
+
+/** Request headers carrying the session cookie just issued by sign-in. */
+function requestHeadersFromSignIn(headers: Headers): Headers | null {
+  const cookie = headers
+    .getSetCookie()
+    .map((entry) => entry.split(";")[0])
+    .join("; ");
+  return cookie ? new Headers({ cookie }) : null;
 }
 
 export async function loginAction(
@@ -46,14 +70,21 @@ export async function loginAction(
   }
 
   try {
-    const result = await getAuth().api.signInEmail({
+    const { headers: signInHeaders, response } = await getAuth().api.signInEmail({
       body: {
         email: parsed.data.email.toLowerCase(),
         password: parsed.data.password,
       },
+      returnHeaders: true,
     });
 
-    if ((result.user as { role?: string }).role !== "admin") {
+    if (response.user.role !== "admin") {
+      // Sign-in has already issued a session; revoke it so a rejected account is
+      // not left signed in. nextCookies clears the cookie when sign-out responds.
+      const sessionHeaders = requestHeadersFromSignIn(signInHeaders);
+      if (sessionHeaders) {
+        await getAuth().api.signOut({ headers: sessionHeaders });
+      }
       return {
         error: "This account does not have organizer access.",
         fields: { email: parsed.data.email },
