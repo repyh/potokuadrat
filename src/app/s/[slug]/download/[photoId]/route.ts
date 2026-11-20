@@ -1,7 +1,7 @@
 import type { DownloadQuality } from "@/contracts/share";
 import { getDriveRuntime } from "@/server/drive";
 import { baseName, makeContentDisposition } from "@/server/drive/download";
-import { seedThumbnail } from "@/server/drive/seed-thumbnails";
+import { isSeedMedia, seedMedia } from "@/server/drive/seed-media";
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareMedia } from "@/server/shares/media";
 import { canDownload, resolveStripMetadata } from "@/server/shares/policy";
@@ -41,26 +41,32 @@ async function handle(request: Request, { params }: Context): Promise<Response> 
     );
   }
 
-  const portrait = Boolean(photo.width && photo.height && photo.height > photo.width);
   const name = baseName(photo.name);
 
   // Development seed: no Drive credentials needed.
-  if (photo.driveFileId.startsWith("seed-photo-")) {
-    const seed = seedThumbnail(photo.driveFileId, quality === "web" ? 2048 : 1600, portrait);
-    if (seed) {
-      const headers = new Headers({
-        "content-type": seed.contentType,
-        "content-disposition": makeContentDisposition(
-          quality === "web" ? `${name}-2048.svg` : `${name}.svg`,
-        ),
-        "cache-control": DOWNLOAD_CACHE_CONTROL,
-        "x-content-type-options": "nosniff",
-      });
-      headers.set("content-length", String(seed.body.length));
-      return new Response(request.method === "HEAD" ? null : new Uint8Array(seed.body), {
-        status: 200,
-        headers,
-      });
+  if (isSeedMedia(photo.driveFileId)) {
+    const width = quality === "web" ? 2048 : 1600;
+
+    try {
+      const seed = await seedMedia(photo.driveFileId, width);
+      if (seed) {
+        const headers = new Headers({
+          "content-type": seed.contentType,
+          "content-disposition": makeContentDisposition(
+            quality === "web" ? `${name}-2048.jpg` : `${name}.jpg`,
+          ),
+          "cache-control": DOWNLOAD_CACHE_CONTROL,
+          "x-content-type-options": "nosniff",
+        });
+        headers.set("content-length", String(seed.body.length));
+        return new Response(request.method === "HEAD" ? null : new Uint8Array(seed.body), {
+          status: 200,
+          headers,
+        });
+      }
+    } catch (error) {
+      console.error("[share] seed media unavailable:", error);
+      return Response.json({ error: "Seed media unavailable." }, { status: 502 });
     }
   }
 

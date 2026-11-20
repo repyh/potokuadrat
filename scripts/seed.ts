@@ -1,6 +1,6 @@
 /**
- * Development seed: an organization, an admin, one ready album with placeholder photo
- * metadata, and the share variants the UI needs to build states.
+ * Development seed: an organization, an admin, one ready album backed by Unsplash
+ * photographs, and the share variants the UI needs to build states.
  *
  * Run with `npm run db:seed` after `npm run db:migrate`.
  */
@@ -14,6 +14,8 @@ config();
 
 import { getAuth } from "@/server/auth/auth";
 import { closeDb, getDb } from "@/server/db/client";
+import { SEED_PHOTOS } from "@/server/drive/seed-photos";
+import { warmSeedMedia } from "@/server/drive/seed-media";
 import {
   albumFolders,
   albums,
@@ -34,7 +36,8 @@ const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "potokuadrat-seed
 const SEED_SHARE_PASSWORD = "seed-pass-123";
 const SEED_RECIPIENT_EMAIL = "guest@example.com";
 const SEED_MAGIC_TOKEN = "seed-magic-token";
-const PHOTO_COUNT = 24;
+const PHOTO_COUNT = SEED_PHOTOS.length;
+const WARM_WIDTHS = [400, 1600, 2048] as const;
 
 const db = getDb();
 
@@ -116,24 +119,19 @@ async function main() {
     position: 0,
   });
 
-  const photoRows = Array.from({ length: PHOTO_COUNT }, (_, index) => {
-    const number = String(index + 1).padStart(2, "0");
-    const portrait = index % 3 === 2;
-
-    return {
-      albumId: album.id,
-      driveFileId: `seed-photo-${number}`,
-      name: `Seed Photo ${number}.jpg`,
-      mimeType: "image/jpeg",
-      width: portrait ? 4000 : 6000,
-      height: portrait ? 6000 : 4000,
-      bytes: 2_000_000 + index * 10_000,
-      takenAt: new Date(Date.UTC(2026, 9, 1 + index, 10, 0, 0)),
-      driveModifiedAt: new Date(Date.UTC(2026, 10, 1, 10, 0, 0)),
-      sortIndex: index,
-      thumbStatus: "pending" as const,
-    };
-  });
+  const photoRows = SEED_PHOTOS.map((photo, index) => ({
+    albumId: album.id,
+    driveFileId: photo.driveFileId,
+    name: photo.name,
+    mimeType: "image/jpeg",
+    width: photo.width,
+    height: photo.height,
+    bytes: 2_000_000 + index * 10_000,
+    takenAt: new Date(Date.UTC(2026, 9, 1 + index, 10, 0, 0)),
+    driveModifiedAt: new Date(Date.UTC(2026, 10, 1, 10, 0, 0)),
+    sortIndex: index,
+    thumbStatus: "ready" as const,
+  }));
 
   const insertedPhotos = await db
     .insert(photos)
@@ -146,6 +144,21 @@ async function main() {
       .update(albums)
       .set({ coverPhotoId: insertedPhotos[0].id })
       .where(eq(albums.id, album.id));
+  }
+
+  // Warm the media cache so the first gallery view needs no network. A failure only
+  // warns: the media routes still fetch lazily for whatever is missing.
+  if (process.env.SEED_SKIP_MEDIA === "1") {
+    console.log("Skipping Unsplash warm-up (SEED_SKIP_MEDIA=1).");
+  } else {
+    const mediaDir = process.env.SEED_MEDIA_DIR?.trim() || ".cache/seed";
+    const warmed = await warmSeedMedia(WARM_WIDTHS);
+    console.log(`  media:  ${warmed.fetched} files cached in ${mediaDir}`);
+    for (const failure of warmed.failed) {
+      console.warn(
+        `  media warning: ${failure.driveFileId} @${failure.width}px — ${failure.error}`,
+      );
+    }
   }
 
   const { hashPassword } = await import("better-auth/crypto");

@@ -1,7 +1,7 @@
 import { isThumbWidth } from "@/server/drive/client";
 import { getDriveRuntime } from "@/server/drive";
 import { baseName, makeContentDisposition } from "@/server/drive/download";
-import { seedThumbnail } from "@/server/drive/seed-thumbnails";
+import { isSeedMedia, seedMedia } from "@/server/drive/seed-media";
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareMedia } from "@/server/shares/media";
 import { resolveStripMetadata } from "@/server/shares/policy";
@@ -30,31 +30,36 @@ async function handle(request: Request, { params }: Context): Promise<Response> 
   }
 
   const { share, photo } = resolved;
-  const portrait = Boolean(photo.width && photo.height && photo.height > photo.width);
 
-  if (photo.driveFileId.startsWith("seed-photo-")) {
-    const seed = seedThumbnail(photo.driveFileId, width, portrait);
-    if (seed) {
-      const headers = new Headers({
-        "content-type": seed.contentType,
-        "cache-control": CACHE_CONTROL,
-        etag: seed.etag,
-        "x-content-type-options": "nosniff",
-      });
-      if (url.searchParams.get("download") === "1") {
-        headers.set(
-          "content-disposition",
-          makeContentDisposition(`${baseName(photo.name)}-${width}.svg`),
-        );
+  // Development seed: no Drive credentials needed.
+  if (isSeedMedia(photo.driveFileId)) {
+    try {
+      const seed = await seedMedia(photo.driveFileId, width);
+      if (seed) {
+        const headers = new Headers({
+          "content-type": seed.contentType,
+          "cache-control": CACHE_CONTROL,
+          etag: seed.etag,
+          "x-content-type-options": "nosniff",
+        });
+        if (url.searchParams.get("download") === "1") {
+          headers.set(
+            "content-disposition",
+            makeContentDisposition(`${baseName(photo.name)}-${width}.jpg`),
+          );
+        }
+        if (request.headers.get("if-none-match") === seed.etag) {
+          return new Response(null, { status: 304, headers });
+        }
+        headers.set("content-length", String(seed.body.length));
+        return new Response(request.method === "HEAD" ? null : new Uint8Array(seed.body), {
+          status: 200,
+          headers,
+        });
       }
-      if (request.headers.get("if-none-match") === seed.etag) {
-        return new Response(null, { status: 304, headers });
-      }
-      headers.set("content-length", String(seed.body.length));
-      return new Response(request.method === "HEAD" ? null : new Uint8Array(seed.body), {
-        status: 200,
-        headers,
-      });
+    } catch (error) {
+      console.error("[share] seed media unavailable:", error);
+      return Response.json({ error: "Seed media unavailable." }, { status: 502 });
     }
   }
 
