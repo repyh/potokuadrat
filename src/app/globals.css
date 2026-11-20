@@ -2639,6 +2639,14 @@ select {
   color: var(--quiet);
 }
 
+.admin-table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-status-text {
   font-size: 13px;
   font-weight: 700;
@@ -2654,6 +2662,48 @@ select {
 .admin-dialog-stack {
   display: grid;
   gap: 16px;
+}
+
+.admin-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ground) 35%, var(--paper));
+}
+
+.admin-folder-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-folder-row .ui-choice-row {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.admin-folder-row .ui-choice-label {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+@media (max-width: 640px) {
+  .admin-input-row,
+  .admin-folder-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
 }
 
 .admin-settings-sections {
