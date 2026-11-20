@@ -10,6 +10,11 @@ import { organizations, users } from "@/server/db/schema";
 
 export interface SetupState {
   error?: string;
+  fields?: {
+    name?: string;
+    email?: string;
+    organizationName?: string;
+  };
 }
 
 const setupSchema = z.object({
@@ -30,15 +35,25 @@ export async function setupAction(
   _state: SetupState,
   formData: FormData,
 ): Promise<SetupState> {
+  const rawFields = {
+    name: typeof formData.get("name") === "string" ? String(formData.get("name")).trim() : "",
+    email: typeof formData.get("email") === "string" ? String(formData.get("email")).trim() : "",
+    organizationName:
+      typeof formData.get("organizationName") === "string"
+        ? String(formData.get("organizationName")).trim()
+        : "",
+  };
+
   const parsed = setupSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
+    ...rawFields,
     password: formData.get("password"),
-    organizationName: formData.get("organizationName"),
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
+    return {
+      error: parsed.error.issues[0]?.message ?? "Check the form and try again.",
+      fields: rawFields,
+    };
   }
 
   const db = getDb();
@@ -79,7 +94,10 @@ export async function setupAction(
       // Do not leave an organization behind when the admin account failed.
       await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
-    return { error: "Could not create the admin account. Check the details and try again." };
+    return {
+      error: "Could not create the admin account. Check the details and try again.",
+      fields: rawFields,
+    };
   }
 
   redirect("/admin");

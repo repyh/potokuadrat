@@ -8,17 +8,25 @@ import { loginAction, type LoginState } from "./actions";
 
 const initialState: LoginState = {};
 
-export function LoginForm() {
+export interface LoginFormProps {
+  redirectTo?: string;
+}
+
+export function LoginForm({ redirectTo }: LoginFormProps) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
     <form action={formAction} className="auth-form" noValidate>
+      {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
+
       <Field htmlFor="email" label="Email">
         <Input
           id="email"
           name="email"
           type="email"
           autoComplete="email"
+          defaultValue={state.fields?.email}
+          invalid={Boolean(state.error)}
           required
           disabled={pending}
         />
@@ -30,6 +38,7 @@ export function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
+          invalid={Boolean(state.error)}
           required
           disabled={pending}
         />

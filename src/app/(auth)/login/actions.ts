@@ -7,6 +7,9 @@ import { getAuth } from "@/server/auth/auth";
 
 export interface LoginState {
   error?: string;
+  fields?: {
+    email?: string;
+  };
 }
 
 const loginSchema = z.object({
@@ -14,30 +17,55 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function safeRedirectPath(raw: FormDataEntryValue | null): string {
+  if (typeof raw !== "string") {
+    return "/admin";
+  }
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return "/admin";
+  }
+  return trimmed;
+}
+
 export async function loginAction(
   _state: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
+  const rawEmail = typeof formData.get("email") === "string" ? String(formData.get("email")).trim() : "";
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
+    email: rawEmail,
     password: formData.get("password"),
   });
 
   if (!parsed.success) {
-    return { error: "Enter your email and password." };
+    return {
+      error: "Enter your email and password.",
+      fields: { email: rawEmail },
+    };
   }
 
   try {
-    await getAuth().api.signInEmail({
+    const result = await getAuth().api.signInEmail({
       body: {
         email: parsed.data.email.toLowerCase(),
         password: parsed.data.password,
       },
     });
+
+    if ((result.user as { role?: string }).role !== "admin") {
+      return {
+        error: "This account does not have organizer access.",
+        fields: { email: parsed.data.email },
+      };
+    }
   } catch {
     // Same message for unknown email, wrong password, and rate limiting.
-    return { error: "Invalid email or password." };
+    return {
+      error: "Invalid email or password.",
+      fields: { email: parsed.data.email },
+    };
   }
 
-  redirect("/admin");
+  redirect(safeRedirectPath(formData.get("redirectTo")));
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { connection } from "next/server";
 import { count } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -35,7 +36,7 @@ export default async function SetupPage() {
       <SetupForm />
 
       <p className="auth-note">
-        Already set up? <a href="/login">Sign in</a>.
+        Already set up? <Link href="/login">Sign in</Link>.
       </p>
     </section>
   );
