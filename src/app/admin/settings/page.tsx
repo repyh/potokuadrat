@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
-import type { DriveStatusState, OrganizationSettings } from "@/contracts/admin";
-import { SettingsMockup } from "@/features/admin/settings-mockup";
+import { SettingsForm } from "@/features/admin/settings-form";
 import { requireAdmin } from "@/server/auth/session";
+import { checkDriveStatus } from "@/server/drive/status";
 import { getOrganizationService } from "@/server/organizations/runtime";
 
 export const metadata: Metadata = {
@@ -11,21 +11,10 @@ export const metadata: Metadata = {
 
 export default async function AdminSettingsPage() {
   await requireAdmin();
-  const stored = await getOrganizationService().get();
+  const [initialSettings, driveStatus] = await Promise.all([
+    getOrganizationService().get(),
+    checkDriveStatus(),
+  ]);
 
-  const initialSettings: OrganizationSettings = stored ?? {
-    name: "Potokuadrat",
-    title: null,
-    logo: null,
-    accent: "#d9ef63",
-    footerEnabled: true,
-    stripMetadata: true,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const driveState: DriveStatusState = process.env.GOOGLE_DRIVE_KEY_FILE?.trim()
-    ? "reachable"
-    : "not_configured";
-
-  return <SettingsMockup initialSettings={initialSettings} driveState={driveState} />;
+  return <SettingsForm initialSettings={initialSettings} driveStatus={driveStatus} />;
 }
