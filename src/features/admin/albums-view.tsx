@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import type { AlbumSummary } from "@/contracts/album";
+import type { AlbumStatus, AlbumSummary } from "@/contracts/album";
 import type { AlbumDetailResponse, DriveFolderOption, DriveFoldersResponse } from "@/contracts/admin";
 import {
   Alert,
@@ -13,38 +14,33 @@ import {
   EmptyState,
   Field,
   Input,
+  Pagination,
   Select,
 } from "@/components/ui";
 
+import { AlbumCoverMark, AlbumStatusPill, albumPhotoLabel } from "./album-display";
+import { extractDriveFolderId } from "./drive-folder";
+import { formatCount, formatRelative } from "./format";
+
 export interface AlbumsViewProps {
   albums: AlbumSummary[];
+  /** Server timestamp so relative dates match between SSR and hydration. */
+  now: number;
 }
 
-const STATUS_LABEL: Record<AlbumSummary["status"], string> = {
-  ready: "Public",
-  indexing: "Private",
-  failed: "Private",
-};
+const PAGE_SIZE = 6;
 
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-}
+type StatusFilter = "all" | AlbumStatus;
+type SortKey = "updated" | "created" | "title";
 
-function extractDriveFolderId(raw: string): string {
-  const trimmed = raw.trim();
-  const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  return match?.[1] ?? trimmed;
-}
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "indexing", label: "Indexing" },
+  { value: "ready", label: "Ready" },
+  { value: "failed", label: "Failed" },
+];
 
-export function AlbumsView({ albums }: AlbumsViewProps) {
+export function AlbumsView({ albums, now }: AlbumsViewProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [albumTitle, setAlbumTitle] = useState("");
@@ -55,6 +51,11 @@ export function AlbumsView({ albums }: AlbumsViewProps) {
   const [pastedFolderId, setPastedFolderId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<SortKey>("updated");
+  const [page, setPage] = useState(1);
 
   const openNewAlbumDialog = async () => {
     setDialogOpen(true);
@@ -83,6 +84,35 @@ export function AlbumsView({ albums }: AlbumsViewProps) {
       setLoadingFolders(false);
     }
   };
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const filtered = albums.filter((album) => {
+      if (status !== "all" && album.status !== status) {
+        return false;
+      }
+      if (!needle) {
+        return true;
+      }
+      return (
+        album.title.toLowerCase().includes(needle) ||
+        album.slug.toLowerCase().includes(needle)
+      );
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sort === "title") {
+        return a.title.localeCompare(b.title);
+      }
+      const key = sort === "created" ? "createdAt" : "updatedAt";
+      return new Date(b[key]).getTime() - new Date(a[key]).getTime();
+    });
+  }, [albums, query, status, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = visible.slice(start, start + PAGE_SIZE);
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -139,11 +169,20 @@ export function AlbumsView({ albums }: AlbumsViewProps) {
     }
   };
 
+  const resetFilters = () => {
+    setQuery("");
+    setStatus("all");
+    setPage(1);
+  };
+
   return (
     <section className="admin-page" aria-labelledby="albums-heading">
       <header className="admin-page-header">
         <div>
-          <h1 id="albums-heading">Albums</h1>
+          <div className="admin-page-title">
+            <h1 id="albums-heading">Albums</h1>
+            <span className="admin-page-sub">{formatCount(albums.length)}</span>
+          </div>
         </div>
         <Button variant="primary" size="md" onClick={() => void openNewAlbumDialog()}>
           New album
@@ -152,8 +191,8 @@ export function AlbumsView({ albums }: AlbumsViewProps) {
 
       {albums.length === 0 ? (
         <EmptyState
-          title="No albums indexed yet"
-          description="Connect a shared Google Drive folder to create your first client folio."
+          title="No albums yet"
+          description="Create the first album, then pick the Drive folders to index."
           action={
             <Button variant="primary" onClick={() => void openNewAlbumDialog()}>
               Create first album
@@ -161,41 +200,124 @@ export function AlbumsView({ albums }: AlbumsViewProps) {
           }
         />
       ) : (
-        <DataTable
-          rowKeyField="id"
-          columns={[
-            { key: "title", header: "Title" },
-            { key: "status", header: "Status" },
-            { key: "photos", header: "Photos", numeric: true },
-            { key: "created", header: "Created" },
-            { key: "actions", header: "Manage", numeric: true },
-          ]}
-          rows={albums.map((row) => ({
-            id: row.id,
-            title: (
-              <div className="admin-table-primary">
-                <strong>{row.title}</strong>
-                <span className="admin-table-sub">/{row.slug}</span>
-              </div>
-            ),
-            status: (
-              <span className={`admin-status-text is-${row.status}`}>
-                {STATUS_LABEL[row.status]}
+        <>
+          <div className="admin-toolbar">
+            <Input
+              type="search"
+              className="admin-search"
+              aria-label="Search albums"
+              placeholder="Search albums"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+            />
+
+            <div className="admin-chips" role="group" aria-label="Filter by index status">
+              {STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`admin-chip ${status === filter.value ? "is-active" : ""}`.trim()}
+                  aria-pressed={status === filter.value}
+                  onClick={() => {
+                    setStatus(filter.value);
+                    setPage(1);
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="admin-sort">
+              <span>Sort</span>
+              <Select
+                aria-label="Sort albums"
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value as SortKey);
+                  setPage(1);
+                }}
+                options={[
+                  { value: "updated", label: "Updated" },
+                  { value: "created", label: "Created" },
+                  { value: "title", label: "Title" },
+                ]}
+              />
+            </label>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState
+              title="No albums match"
+              description="Try a different search or status."
+              action={
+                <Button variant="secondary" onClick={resetFilters}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <DataTable
+              rowKeyField="id"
+              columns={[
+                { key: "title", header: "Cover + title" },
+                { key: "status", header: "Status" },
+                { key: "photos", header: "Photos", numeric: true },
+                { key: "shares", header: "Shares", numeric: true },
+                { key: "updated", header: "Updated" },
+                { key: "actions", header: "Manage", numeric: true },
+              ]}
+              rows={pageRows.map((album) => ({
+                id: album.id,
+                title: (
+                  <Link
+                    href={`/admin/albums/${encodeURIComponent(album.id)}`}
+                    className="admin-table-title"
+                  >
+                    <AlbumCoverMark title={album.title} />
+                    <span className="admin-table-primary">
+                      <strong>{album.title}</strong>
+                      <span className="admin-table-sub">/{album.slug}</span>
+                    </span>
+                  </Link>
+                ),
+                status: <AlbumStatusPill status={album.status} />,
+                photos: <span className="tabular-nums">{albumPhotoLabel(album)}</span>,
+                shares: <span className="tabular-nums">{formatCount(album.shareCount)}</span>,
+                updated: (
+                  <span className="tabular-nums admin-quiet">
+                    {formatRelative(album.updatedAt, now)}
+                  </span>
+                ),
+                actions: (
+                  <Link
+                    href={`/admin/albums/${encodeURIComponent(album.id)}`}
+                    className="ui-btn ui-btn-ghost ui-btn-sm"
+                  >
+                    <span className="ui-btn-label">Manage →</span>
+                  </Link>
+                ),
+              }))}
+            />
+          )}
+
+          {visible.length > PAGE_SIZE && (
+            <div className="admin-pager">
+              <span className="admin-pager-count">
+                {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of{" "}
+                {formatCount(visible.length)}
               </span>
-            ),
-            photos: <span className="tabular-nums">{row.photoCount}</span>,
-            created: <span className="tabular-nums">{formatDate(row.createdAt)}</span>,
-            actions: (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/admin/albums/${encodeURIComponent(row.id)}`)}
-              >
-                Manage →
-              </Button>
-            ),
-          }))}
-        />
+              <Pagination
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+        </>
       )}
 
       <Dialog

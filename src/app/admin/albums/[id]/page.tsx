@@ -25,5 +25,5 @@ export default async function AdminAlbumDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  return <AlbumDetailView detail={detail} shares={shares} />;
+  return <AlbumDetailView detail={detail} shares={shares} now={new Date().getTime()} />;
 }

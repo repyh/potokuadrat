@@ -12,5 +12,5 @@ export default async function AdminAlbumsPage() {
   const session = await requireAdmin();
   const albums = await getAlbumService().list(session.user.id);
 
-  return <AlbumsView albums={albums} />;
+  return <AlbumsView albums={albums} now={new Date().getTime()} />;
 }

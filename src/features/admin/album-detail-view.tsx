@@ -34,9 +34,14 @@ import {
   Switch,
 } from "@/components/ui";
 
+import { formatCount, formatDay } from "./format";
+import { extractDriveFolderId } from "./drive-folder";
+
 export interface AlbumDetailViewProps {
   detail: AlbumDetail;
   shares: ShareSummary[];
+  /** Server timestamp so relative dates match between SSR and hydration. */
+  now: number;
 }
 
 const MODE_LABELS: Record<ShareMode, string> = {
@@ -45,13 +50,7 @@ const MODE_LABELS: Record<ShareMode, string> = {
   magic_link: "Magic link",
 };
 
-function extractDriveFolderId(raw: string): string {
-  const trimmed = raw.trim();
-  const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  return match?.[1] ?? trimmed;
-}
-
-export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
+export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
   const router = useRouter();
   const { album, folders, progress } = detail;
 
@@ -75,6 +74,8 @@ export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<ShareSummary | null>(null);
+  const [revoking, setRevoking] = useState(false);
   const [feedback, setFeedback] = useState<{
     tone: "success" | "danger";
     title: string;
@@ -317,8 +318,16 @@ export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
     router.refresh();
   };
 
-  const handleRevokeShare = async (shareId: string) => {
-    const result = await deleteShareAction(shareId);
+  const handleRevokeShare = async () => {
+    if (!revokeTarget || revoking) {
+      return;
+    }
+
+    setRevoking(true);
+    const result = await deleteShareAction(revokeTarget.id);
+    setRevoking(false);
+    setRevokeTarget(null);
+
     if (!result.ok) {
       setFeedback({ tone: "danger", title: "Revoke failed", message: result.error });
       return;
@@ -575,15 +584,28 @@ export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
             columns={[
               { key: "slug", header: "Link" },
               { key: "mode", header: "Access" },
+              { key: "visits", header: "Visits", numeric: true },
+              { key: "expires", header: "Expires" },
               { key: "downloads", header: "Downloads" },
               { key: "actions", header: "Actions", numeric: true },
             ]}
             rows={shares.map((share) => {
               const path = `/s/${share.slug}`;
+              const expiresAt = share.expiresAt ? new Date(share.expiresAt) : null;
+              const expired = expiresAt ? expiresAt.getTime() <= now : false;
               return {
                 id: share.id,
                 slug: <code>{path}</code>,
                 mode: MODE_LABELS[share.mode],
+                visits: (
+                  <span className="tabular-nums">{formatCount(share.visits)}</span>
+                ),
+                expires: (
+                  <span className={expired ? "admin-quiet" : "tabular-nums"}>
+                    {expiresAt ? formatDay(expiresAt.toISOString()) : "Never"}
+                    {expired ? " · expired" : ""}
+                  </span>
+                ),
                 downloads: share.allowDownload
                   ? share.allowedQualities.join(", ")
                   : "Disabled",
@@ -611,7 +633,7 @@ export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => void handleRevokeShare(share.id)}
+                      onClick={() => setRevokeTarget(share)}
                     >
                       Revoke
                     </Button>
@@ -732,6 +754,42 @@ export function AlbumDetailView({ detail, shares }: AlbumDetailViewProps) {
             />
           )}
         </form>
+      </Dialog>
+
+      <Dialog
+        open={revokeTarget !== null}
+        onClose={() => {
+          if (!revoking) {
+            setRevokeTarget(null);
+          }
+        }}
+        title="Revoke this share?"
+        description="The link stops working immediately. Visits, favorites, and downloads stay in analytics."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setRevokeTarget(null)}
+              disabled={revoking}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={revoking}
+              onClick={() => void handleRevokeShare()}
+            >
+              Revoke share
+            </Button>
+          </>
+        }
+      >
+        {revokeTarget && (
+          <p className="admin-empty-copy">
+            <code>/s/{revokeTarget.slug}</code> · {MODE_LABELS[revokeTarget.mode]} ·{" "}
+            {formatCount(revokeTarget.visits)} visits
+          </p>
+        )}
       </Dialog>
 
       <Dialog
