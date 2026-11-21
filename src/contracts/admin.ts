@@ -51,6 +51,23 @@ export interface AlbumListResponse {
   albums: AlbumSummary[];
 }
 
+/**
+ * Organizer dashboard counters, scoped to the albums one user owns. The overview
+ * renders totals only, so there is no per-album breakdown here.
+ */
+export interface OrganizerStats {
+  albumCount: number;
+  /** Albums still indexing (status = indexing). */
+  indexingAlbumCount: number;
+  shareCount: number;
+  /** Shares that expire within the next 7 days and have not expired yet. */
+  expiringShareCount: number;
+  /** Photos whose thumbnails are ready to serve. */
+  indexedPhotoCount: number;
+  /** Photos whose thumbnail job failed. */
+  failedPhotoCount: number;
+}
+
 export interface UpdateAlbumInput {
   title?: string;
   branding?: BrandingOverride | null;

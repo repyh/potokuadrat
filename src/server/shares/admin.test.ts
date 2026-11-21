@@ -32,6 +32,8 @@ const summary: AdminShareRecord = {
   hasPassword: false,
   photoCount: 0,
   recipientCount: 0,
+  visits: 0,
+  lastVisitAt: null,
 };
 
 const recipient: AdminRecipientRecord = {
@@ -90,7 +92,15 @@ describe("list and detail", () => {
   });
 
   it("maps dates to ISO and a zero subset to null", async () => {
-    const { service } = build();
+    const { service } = build({
+      listByAlbum: vi.fn(async () => [
+        {
+          ...summary,
+          visits: 12,
+          lastVisitAt: "2026-11-20 09:30:00+00",
+        },
+      ]),
+    });
 
     const shares = await service.list("user-1", ALBUM_ID);
 
@@ -99,7 +109,17 @@ describe("list and detail", () => {
       photoCount: null,
       createdAt: now.toISOString(),
       expiresAt: null,
+      visits: 12,
+      lastVisitAt: "2026-11-20T09:30:00.000Z",
     });
+  });
+
+  it("reports a never-opened share as zero visits", async () => {
+    const { service } = build();
+
+    const shares = await service.list("user-1", ALBUM_ID);
+
+    expect(shares[0]).toMatchObject({ visits: 0, lastVisitAt: null });
   });
 
   it("returns null for a share that is not owned", async () => {

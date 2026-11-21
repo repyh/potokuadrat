@@ -1,7 +1,13 @@
 import "server-only";
 
 import type { AlbumSummary } from "@/contracts/album";
-import type { AlbumDetail, AlbumFolderInput, CreateAlbumInput, UpdateAlbumInput } from "@/contracts/admin";
+import type {
+  AlbumDetail,
+  AlbumFolderInput,
+  CreateAlbumInput,
+  OrganizerStats,
+  UpdateAlbumInput,
+} from "@/contracts/admin";
 import { DriveError, parseDriveFolderInput, type DriveClient } from "@/server/drive/client";
 
 import type { AlbumRepository, FolderInput } from "./repository";
@@ -26,6 +32,7 @@ export interface AlbumServiceDeps {
 
 export interface AlbumService {
   list(ownerUserId: string): Promise<AlbumSummary[]>;
+  stats(ownerUserId: string): Promise<OrganizerStats>;
   create(ownerUserId: string, input: CreateAlbumInput): Promise<AlbumSummary>;
   detail(albumId: string): Promise<AlbumDetail | null>;
   reindex(albumId: string, mode?: "full" | "incremental"): Promise<boolean>;
@@ -90,6 +97,10 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
   return {
     async list(ownerUserId) {
       return deps.repository.listAlbums(ownerUserId);
+    },
+
+    async stats(ownerUserId) {
+      return deps.repository.getOrganizerStats(ownerUserId);
     },
 
     async create(ownerUserId, input) {

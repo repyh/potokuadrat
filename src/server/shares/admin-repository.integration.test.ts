@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { clientSessions, favorites } from "@/server/db/schema";
+import { clientSessions, favorites, viewEvents } from "@/server/db/schema";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -99,6 +99,26 @@ describe.skipIf(!databaseUrl)("share admin repository", () => {
 
     expect(detail?.photoIds).toBeNull();
     expect(detail?.photoCount).toBe(0);
+  });
+
+  it("counts views and reports the latest visit", async () => {
+    const shareId = await createShare();
+    const earlier = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const latest = new Date(Date.now() - 30 * 60 * 1000);
+
+    await db.insert(viewEvents).values([
+      { shareId, visitorHash: "visitor-a", createdAt: earlier },
+      { shareId, visitorHash: "visitor-b", createdAt: latest },
+    ]);
+
+    const owned = (await repository.listByAlbum(ALBUM_ID, "user-1")).find(
+      (share) => share.id === shareId,
+    );
+
+    expect(owned).toMatchObject({ visits: 2 });
+    expect(owned?.lastVisitAt && new Date(owned.lastVisitAt).toISOString()).toBe(
+      latest.toISOString(),
+    );
   });
 
   it("lists shares only for the album owner", async () => {
