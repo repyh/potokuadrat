@@ -66,6 +66,8 @@ export interface OrganizerStats {
   indexedPhotoCount: number;
   /** Photos whose thumbnail job failed. */
   failedPhotoCount: number;
+  /** Most recent folder index run, ISO 8601; null when nothing has been indexed. */
+  lastIndexedAt: string | null;
 }
 
 export interface UpdateAlbumInput {

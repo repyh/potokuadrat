@@ -275,7 +275,7 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
     },
 
     async getOrganizerStats(ownerUserId) {
-      const [albumRow, shareRow, photoRow] = await Promise.all([
+      const [albumRow, shareRow, photoRow, driveRow] = await Promise.all([
         db
           .select({
             albumCount: count(),
@@ -311,6 +311,12 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
           .from(photos)
           .innerJoin(albums, eq(photos.albumId, albums.id))
           .where(eq(albums.ownerUserId, ownerUserId)),
+        db
+          .select({
+            lastIndexedAt: sql<string | null>`max(${driveFolders.lastIndexedAt})`,
+          })
+          .from(driveFolders)
+          .where(eq(driveFolders.ownerUserId, ownerUserId)),
       ]);
 
       return {
@@ -320,6 +326,9 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         expiringShareCount: shareRow[0]?.expiringShareCount ?? 0,
         indexedPhotoCount: photoRow[0]?.indexedPhotoCount ?? 0,
         failedPhotoCount: photoRow[0]?.failedPhotoCount ?? 0,
+        lastIndexedAt: driveRow[0]?.lastIndexedAt
+          ? new Date(driveRow[0].lastIndexedAt).toISOString()
+          : null,
       };
     },
 

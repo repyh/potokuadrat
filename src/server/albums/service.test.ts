@@ -36,6 +36,7 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
       expiringShareCount: 0,
       indexedPhotoCount: 0,
       failedPhotoCount: 0,
+      lastIndexedAt: null,
     })),
     getAlbum: vi.fn(async () => ({
       id: "album-1",
@@ -170,6 +171,7 @@ describe("createAlbumService", () => {
       expiringShareCount: 2,
       indexedPhotoCount: 120,
       failedPhotoCount: 4,
+      lastIndexedAt: "2026-11-21T09:00:00.000Z",
     };
     const service = makeService(repository({ getOrganizerStats: vi.fn(async () => stats) }));
 

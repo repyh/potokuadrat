@@ -97,10 +97,15 @@ async function main() {
       name: "Seed Folder (local)",
       ownerUserId: admin.id,
       recursive: false,
+      // The dashboard shows "last re-index"; give it something believable.
+      lastIndexedAt: new Date(Date.now() - 4 * 60 * 1000),
     })
     .onConflictDoUpdate({
       target: driveFolders.driveFolderId,
-      set: { name: "Seed Folder (local)" },
+      set: {
+        name: "Seed Folder (local)",
+        lastIndexedAt: new Date(Date.now() - 4 * 60 * 1000),
+      },
     })
     .returning();
 
