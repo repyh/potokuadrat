@@ -8,7 +8,7 @@ import type { DownloadQuality, DownloadScope } from "@/contracts/share";
 import type { DriveClient } from "@/server/drive/client";
 import { baseName } from "@/server/drive/download";
 import { createLimiter } from "@/server/drive/limiter";
-import { seedThumbnail } from "@/server/drive/seed-thumbnails";
+import { isSeedMedia, seedMedia } from "@/server/drive/seed-media";
 import type { ThumbnailCache, ThumbMode } from "@/server/drive/thumb-cache";
 
 import { resolveShareRequest } from "./access-context";
@@ -79,8 +79,8 @@ export function safeEntryName(filename: string): string {
 export function entryNameFor(photo: SharePhotoRecord, quality: DownloadQuality): string {
   const name = safeEntryName(baseName(photo.name));
 
-  if (photo.driveFileId.startsWith("seed-photo-")) {
-    return safeEntryName(quality === "web" ? `${name}-2048.svg` : `${name}.svg`);
+  if (isSeedMedia(photo.driveFileId)) {
+    return safeEntryName(quality === "web" ? `${name}-2048.jpg` : `${name}.jpg`);
   }
 
   return safeEntryName(quality === "web" ? `${name}-2048.jpg` : photo.name);
@@ -148,7 +148,7 @@ export interface ArchiveDrive {
 }
 
 function seeded(photo: SharePhotoRecord): boolean {
-  return photo.driveFileId.startsWith("seed-photo-");
+  return isSeedMedia(photo.driveFileId);
 }
 
 async function openSource(
@@ -157,11 +157,9 @@ async function openSource(
   mode: ThumbMode,
   drive: ArchiveDrive,
 ): Promise<Readable> {
-  const portrait = Boolean(photo.width && photo.height && photo.height > photo.width);
-
   // Development seed: no Drive credentials needed.
   if (seeded(photo)) {
-    const seed = seedThumbnail(photo.driveFileId, quality === "web" ? 2048 : 1600, portrait);
+    const seed = await seedMedia(photo.driveFileId, quality === "web" ? 2048 : 1600);
     if (!seed) {
       throw new Error(`Seed media missing for ${photo.driveFileId}`);
     }

@@ -71,8 +71,9 @@ npm run dev
 The seed (owned by backend) creates:
 
 - one organization and an admin with documented credentials;
-- one album with 24 placeholder photo rows; in development the media routes serve
-  generated SVG placeholders for them, so no Drive key is required;
+- one album with 24 Unsplash travel/landscape photographs; in development the media
+  routes serve them from `.cache/seed/` (warmed by the seed), so no Drive key is
+  required;
 - one public share, one password share, one magic-link share, and one expired share;
 - a client session and a few favorites for the magic-link share.
 

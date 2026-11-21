@@ -15,13 +15,20 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - If either is missing or unauthenticated, **stop immediately** and guide the user through installing and connecting it before continuing.
 
 ### 2. Trello + GitHub Issues Sync Workflow
-- **Trello** (`Potokuadrat` board) tracks board status (`Todo` -> `In-Progress` -> `Done`) using the `PREFIX: Title` convention (`FE:`, `BE:`, `QA:`, `DEVOPS:`, `DESIGN:`).
+- **Trello** (`Potokuadrat` board) tracks work in five lists, `Backlog` -> `Ready` -> `In Progress` -> `In Review` -> `Done`, using the `PREFIX: Title` convention (`FE:`, `BE:`, `QA:`, `DEVOPS:`, `DESIGN:`).
+  - `Backlog` — unshaped epics, audits, and ideas. No GitHub Issue needed yet. Label it `needs-spec` (scope missing), `debt`, or `polish` (quality pass, not a shippable unit).
+  - `Ready` — groomed and pickable: a GitHub Issue exists and is linked, acceptance criteria are written, and any required `src/contracts/**` change is already merged. Only work that fits in two or three days.
+  - `In Progress` — a branch exists. One active card per developer.
+  - `In Review` — the PR is open and CI is green, waiting on the reviewer CODEOWNERS requests. This is not Done.
+  - `Done` — the PR is merged to `master`, the issue is closed, and the work was demoed. Archive `Done` cards weekly.
+- **`Blocked` is a label, not a list.** Apply the `blocked` label, comment the card with who or what unblocks it, and set a due date. Clear the label when it unblocks.
 - **GitHub Issues** mirrors actionable tasks 1:1 for code, branch, and PR traceability (`Closes #<issue>`).
 - **Sync loop:**
-  1. **Start:** Pick a `Todo` Trello card -> ensure a matching GitHub Issue exists using the template below and cross-link their URLs -> move the Trello card to `In-Progress`.
+  1. **Start:** Pick a `Ready` card -> ensure its GitHub Issue exists using the template below and the two are cross-linked -> move the Trello card to `In Progress`.
   2. **Branch & PR:** Branch from `master` referencing the issue (e.g. `feat/<issue>-short-name`) and include `Closes #<issue>` in the PR.
   3. **After each push:** If technical requirements, contracts, or implementation details changed, add a comment on the GitHub Issue (`gh issue comment <issue> --body "..."`) documenting the update.
-  4. **Finish:** When the PR merges to `master` and the GitHub Issue closes, move the Trello card to `Done`.
+  4. **Open for review:** Once the PR is open and CI is green, move the card to `In Review` and comment the PR URL on it.
+  5. **Finish:** When the PR merges to `master` and the GitHub Issue closes, move the Trello card to `Done`.
 
 #### Mandatory GitHub Issue Template
 Every GitHub Issue MUST follow this structure:

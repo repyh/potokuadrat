@@ -114,9 +114,11 @@ days. Password attempts are limited to 5 per minute per share and client, magic-
 exchanges to 10. Expired shares return `410`, missing proof `403`, and unknown shares
 or photos `404`. In development, the seeded magic token is `seed-magic-token`.
 
-In development, the seeded album (`seed-photo-*`) serves generated SVG placeholders so
-the gallery runs without Google credentials. That path is disabled in production
-builds.
+In development, the seeded album (`seed-photo-*`) serves travel and landscape
+photographs from Unsplash, cached under `.cache/seed/` (override with
+`SEED_MEDIA_DIR`). `npm run db:seed` warms the 400, 1600, and 2048 px versions; a
+missing file is fetched on demand. `SEED_SKIP_MEDIA=1` skips the warm-up. The path
+needs no Google credentials and is disabled in production builds.
 
 ## Documentation
 

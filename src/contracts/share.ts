@@ -82,6 +82,10 @@ export interface ShareSummary {
   /** Size of the frozen subset; null when the share follows the whole album. */
   photoCount: number | null;
   recipientCount: number;
+  /** Page views recorded for this link. */
+  visits: number;
+  /** ISO 8601 of the most recent view; null when the link was never opened. */
+  lastVisitAt: string | null;
   createdAt: string;
 }
 

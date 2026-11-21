@@ -35,9 +35,16 @@ export interface AlbumSummary {
   title: string;
   status: AlbumStatus;
   coverPhotoId: string | null;
+  /** Photos indexed for the album, including ones Drive no longer returns. */
   photoCount: number;
+  /** Photos whose thumbnails are ready to serve. */
+  readyPhotoCount: number;
+  /** Share links created for the album, expired ones included. */
+  shareCount: number;
   /** ISO 8601. */
   createdAt: string;
+  /** ISO 8601; moves on rename, branding edits, and indexing status changes. */
+  updatedAt: string;
 }
 
 export interface PhotoPage {
