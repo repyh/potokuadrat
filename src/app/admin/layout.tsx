@@ -1,8 +1,10 @@
-import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
 
+import { AdminShell } from "@/features/admin/admin-shell";
 import { requireAdmin } from "@/server/auth/session";
+import { getDb } from "@/server/db/client";
+import { organizations } from "@/server/db/schema";
 
 import { signOutAction } from "./actions";
 
@@ -13,29 +15,22 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   await connection();
   const session = await requireAdmin();
 
+  const [organization] = await getDb()
+    .select({ name: organizations.name, title: organizations.title })
+    .from(organizations)
+    .limit(1);
+
+  const organizationName =
+    organization?.title?.trim() || organization?.name?.trim() || "Potokuadrat";
+
   return (
-    <main className="folio-frame">
-      <header className="site-navbar">
-        <div className="navbar-inner">
-          <Link className="navbar-brand" href="/admin" aria-label="Potokuadrat admin">
-            <span className="brand-stamp" aria-hidden="true">
-              P
-            </span>
-            <span>Potokuadrat</span>
-          </Link>
-
-          <div className="navbar-actions">
-            <span className="navbar-user">{session.user.name}</span>
-            <form action={signOutAction}>
-              <button type="submit" className="navbar-login-btn">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-
-      <div className="folio-page">{children}</div>
-    </main>
+    <AdminShell
+      organizationName={organizationName}
+      userName={session.user.name}
+      userEmail={session.user.email}
+      signOutAction={signOutAction}
+    >
+      {children}
+    </AdminShell>
   );
 }
