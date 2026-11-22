@@ -3,12 +3,19 @@
 import { revalidatePath } from "next/cache";
 
 import type { ActionResult } from "@/contracts/actions";
-import type { AlbumDetailResponse, SetAlbumCoverInput, UpdateAlbumInput } from "@/contracts/admin";
+import type {
+  AlbumDetailResponse,
+  CreateAlbumInput,
+  SetAlbumCoverInput,
+  UpdateAlbumInput,
+} from "@/contracts/admin";
+import type { AlbumSummary } from "@/contracts/album";
 import { getAdminSession } from "@/server/auth/api";
 import { AlbumValidationError } from "@/server/albums/service";
 import { getAlbumService } from "@/server/albums/runtime";
 import {
   albumIdSchema,
+  createAlbumSchema,
   setAlbumCoverSchema,
   updateAlbumSchema,
 } from "@/server/albums/validation";
@@ -39,6 +46,60 @@ function refreshAlbumPages(albumId: string): void {
 async function adminUserId(): Promise<string | null> {
   const session = await getAdminSession();
   return session?.user.id ?? null;
+}
+
+export async function createAlbumAction(
+  input: CreateAlbumInput,
+): Promise<ActionResult<AlbumSummary>> {
+  const userId = await adminUserId();
+  if (!userId) {
+    return UNAUTHORIZED;
+  }
+
+  const parsed = createAlbumSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Check the album and try again.",
+      code: "validation",
+    };
+  }
+
+  try {
+    const album = await getAlbumService().create(userId, parsed.data);
+    revalidatePath("/admin");
+    revalidatePath("/admin/albums");
+    return { ok: true, data: album };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function reindexAlbumAction(
+  albumId: string,
+  mode: "full" | "incremental" = "full",
+): Promise<ActionResult<{ albumId: string }>> {
+  const userId = await adminUserId();
+  if (!userId) {
+    return UNAUTHORIZED;
+  }
+
+  const parsed = albumIdSchema.safeParse(albumId);
+  if (!parsed.success) {
+    return notFound("Album not found.");
+  }
+
+  try {
+    const queued = await getAlbumService().reindex(userId, parsed.data, mode);
+    if (!queued) {
+      return notFound("Album not found.");
+    }
+    revalidatePath("/admin");
+    refreshAlbumPages(parsed.data);
+    return { ok: true, data: { albumId: parsed.data } };
+  } catch (error) {
+    return failed(error);
+  }
 }
 
 export async function updateAlbumAction(

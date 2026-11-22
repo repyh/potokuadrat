@@ -49,7 +49,7 @@ export default async function AdminPage() {
           <p className="auth-lede">Signed in as {session.user.email}.</p>
         </div>
 
-        <Link href="/admin/albums" className="ui-btn ui-btn-primary ui-btn-md">
+        <Link href="/admin/albums/new" className="ui-btn ui-btn-primary ui-btn-md">
           <span className="ui-btn-label">New album</span>
           <span className="ui-btn-icon" aria-hidden="true">
             →
@@ -122,7 +122,7 @@ export default async function AdminPage() {
             title="No albums yet"
             description="Create the first album, then pick the Drive folders to index."
             action={
-              <Link href="/admin/albums" className="ui-btn ui-btn-primary ui-btn-md">
+              <Link href="/admin/albums/new" className="ui-btn ui-btn-primary ui-btn-md">
                 <span className="ui-btn-label">New album</span>
                 <span className="ui-btn-icon" aria-hidden="true">
                   →

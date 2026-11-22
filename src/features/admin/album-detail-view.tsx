@@ -15,7 +15,11 @@ import type {
   ShareMode,
   ShareSummary,
 } from "@/contracts/share";
-import { deleteAlbumAction, updateAlbumAction } from "@/app/admin/albums/actions";
+import {
+  deleteAlbumAction,
+  reindexAlbumAction,
+  updateAlbumAction,
+} from "@/app/admin/albums/actions";
 import { createShareAction, deleteShareAction } from "@/app/admin/shares/actions";
 import {
   Alert,
@@ -221,35 +225,24 @@ export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
 
     setReindexing(true);
     setFeedback(null);
-    try {
-      const res = await fetch(`/api/admin/albums/${encodeURIComponent(album.id)}/reindex`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setFeedback({
-          tone: "danger",
-          title: "Re-index failed",
-          message: body?.error ?? "Unable to queue re-index.",
-        });
-        return;
-      }
+    const result = await reindexAlbumAction(album.id);
+    setReindexing(false);
 
-      setFeedback({
-        tone: "success",
-        title: "Re-index queued",
-        message: "The worker will scan linked Drive folders shortly.",
-      });
-      router.refresh();
-    } catch {
+    if (!result.ok) {
       setFeedback({
         tone: "danger",
         title: "Re-index failed",
-        message: "Network error while queuing re-index.",
+        message: result.error,
       });
-    } finally {
-      setReindexing(false);
+      return;
     }
+
+    setFeedback({
+      tone: "success",
+      title: "Re-index queued",
+      message: "The worker will scan linked Drive folders shortly.",
+    });
+    router.refresh();
   };
 
   const handleDeleteAlbum = async () => {

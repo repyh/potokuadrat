@@ -1,7 +1,6 @@
 import type { DriveFoldersResponse } from "@/contracts/admin";
 import { getAdminSession, jsonError } from "@/server/auth/api";
-import { DriveError } from "@/server/drive/client";
-import { getDriveRuntime } from "@/server/drive";
+import { listDriveFolderOptions } from "@/server/drive/folders";
 
 export async function GET(): Promise<Response> {
   const session = await getAdminSession();
@@ -9,20 +8,11 @@ export async function GET(): Promise<Response> {
     return jsonError(401, "Unauthorized.");
   }
 
-  try {
-    const drive = getDriveRuntime().client;
-    const [sharedFolders, sharedDrives] = await Promise.all([
-      drive.listSharedFolders(),
-      drive.listSharedDrives(),
-    ]);
-
-    const body: DriveFoldersResponse = { folders: [...sharedDrives, ...sharedFolders] };
-    return Response.json(body);
-  } catch (error) {
-    if (error instanceof DriveError) {
-      return jsonError(502, "Drive could not list folders for the service account.");
-    }
-    console.error("[admin] folder discovery failed:", error);
-    return jsonError(500, "Folder discovery failed.");
+  const listing = await listDriveFolderOptions();
+  if (listing.error) {
+    return jsonError(502, listing.error);
   }
+
+  const body: DriveFoldersResponse = { folders: listing.folders };
+  return Response.json(body);
 }
