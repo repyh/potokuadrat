@@ -155,12 +155,25 @@ describe("createAlbumService", () => {
     const enqueue = vi.fn(async () => {});
     const service = makeService(repo, { enqueue });
 
-    expect(await service.reindex("album-1")).toBe(true);
+    expect(await service.reindex("user-1", "album-1")).toBe(true);
     expect(repo.setStatus).toHaveBeenCalledWith("album-1", "indexing");
     expect(enqueue).toHaveBeenCalledWith("album-1", { mode: "full" });
 
     const missing = makeService(repository({ getAlbum: vi.fn(async () => null) }));
-    expect(await missing.reindex("nope")).toBe(false);
+    expect(await missing.reindex("user-1", "nope")).toBe(false);
+
+    const notOwned = makeService(
+      repository({
+        getAlbum: vi.fn(async () => ({
+          id: "album-1",
+          title: "Album",
+          slug: "album",
+          ownerUserId: "user-2",
+          status: "ready" as const,
+        })),
+      }),
+    );
+    expect(await notOwned.reindex("user-1", "album-1")).toBe(false);
   });
 
   it("returns organizer stats from the repository", async () => {

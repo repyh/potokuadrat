@@ -35,7 +35,11 @@ export interface AlbumService {
   stats(ownerUserId: string): Promise<OrganizerStats>;
   create(ownerUserId: string, input: CreateAlbumInput): Promise<AlbumSummary>;
   detail(albumId: string): Promise<AlbumDetail | null>;
-  reindex(albumId: string, mode?: "full" | "incremental"): Promise<boolean>;
+  reindex(
+    ownerUserId: string,
+    albumId: string,
+    mode?: "full" | "incremental",
+  ): Promise<boolean>;
   /** Returns null when the album is missing or belongs to someone else. */
   update(
     ownerUserId: string,
@@ -128,9 +132,9 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
       return deps.repository.getAlbumDetail(albumId);
     },
 
-    async reindex(albumId, mode = "full") {
+    async reindex(ownerUserId, albumId, mode = "full") {
       const album = await deps.repository.getAlbum(albumId);
-      if (!album) {
+      if (!album || album.ownerUserId !== ownerUserId) {
         return false;
       }
 

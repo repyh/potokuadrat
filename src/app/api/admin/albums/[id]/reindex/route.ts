@@ -16,7 +16,7 @@ export async function POST(
     return jsonError(400, "Unsupported re-index mode.");
   }
 
-  const queued = await getAlbumService().reindex(id, mode);
+  const queued = await getAlbumService().reindex(session.user.id, id, mode);
 
   if (!queued) {
     return jsonError(404, "Album not found.");
