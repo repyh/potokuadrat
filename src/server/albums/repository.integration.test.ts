@@ -141,6 +141,50 @@ describe.skipIf(!databaseUrl)("album repository", () => {
   });
 
 
+  it("reports share counts, ready photos, and organizer stats", async () => {
+    const [album] = await repository.listAlbums("user-1");
+
+    await db
+      .update(photos)
+      .set({ thumbStatus: "ready" })
+      .where(eq(photos.albumId, album.id));
+
+    await db.insert(shares).values([
+      {
+        albumId: album.id,
+        slug: "stats-public",
+        mode: "public",
+        expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      },
+      {
+        albumId: album.id,
+        slug: "stats-forever",
+        mode: "public",
+      },
+    ]);
+
+    const [listed] = await repository.listAlbums("user-1");
+    expect(listed).toMatchObject({
+      shareCount: 2,
+      readyPhotoCount: 2,
+      photoCount: 2,
+    });
+    expect(listed.updatedAt).toBe(
+      (await repository.getAlbumDetail(album.id))?.album.updatedAt,
+    );
+
+    const stats = await repository.getOrganizerStats("user-1");
+    expect(stats).toMatchObject({
+      albumCount: 1,
+      indexingAlbumCount: 0,
+      shareCount: 2,
+      expiringShareCount: 1,
+      indexedPhotoCount: 2,
+      failedPhotoCount: 0,
+      lastIndexedAt: "2026-11-15T10:00:00.000Z",
+    });
+  });
+
   it("updates the title, branding, and folder set", async () => {
     const [album] = await repository.listAlbums("user-1");
 

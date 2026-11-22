@@ -27,6 +27,7 @@ import {
   shareRecipients,
   shares,
   users,
+  viewEvents,
 } from "@/server/db/schema";
 
 const SEED_ALBUM_SLUG = "seed-gallery";
@@ -96,10 +97,15 @@ async function main() {
       name: "Seed Folder (local)",
       ownerUserId: admin.id,
       recursive: false,
+      // The dashboard shows "last re-index"; give it something believable.
+      lastIndexedAt: new Date(Date.now() - 4 * 60 * 1000),
     })
     .onConflictDoUpdate({
       target: driveFolders.driveFolderId,
-      set: { name: "Seed Folder (local)" },
+      set: {
+        name: "Seed Folder (local)",
+        lastIndexedAt: new Date(Date.now() - 4 * 60 * 1000),
+      },
     })
     .returning();
 
@@ -164,47 +170,82 @@ async function main() {
   const { hashPassword } = await import("better-auth/crypto");
   const passwordHash = await hashPassword(SEED_SHARE_PASSWORD);
 
-  await db.insert(shares).values([
-    {
-      albumId: album.id,
-      slug: "seed-public",
-      mode: "public",
-      allowDownload: true,
-      allowedQualities: ["original", "web"],
-    },
-    {
-      albumId: album.id,
-      slug: "seed-password",
-      mode: "password",
-      passwordHash,
-      allowDownload: true,
-      allowedQualities: ["web"],
-    },
-    {
-      albumId: album.id,
-      slug: "seed-expired",
-      mode: "public",
-      allowDownload: false,
-      allowedQualities: ["web"],
-      expiresAt: new Date("2026-01-01T00:00:00Z"),
-    },
-    {
-      albumId: album.id,
-      slug: "seed-magic",
-      mode: "magic_link",
-      allowDownload: true,
-      allowedQualities: ["original", "web"],
-    },
-  ]);
+  const insertedShares = await db
+    .insert(shares)
+    .values([
+      {
+        albumId: album.id,
+        slug: "seed-public",
+        mode: "public",
+        allowDownload: true,
+        allowedQualities: ["original", "web"],
+      },
+      {
+        albumId: album.id,
+        slug: "seed-password",
+        mode: "password",
+        passwordHash,
+        allowDownload: true,
+        allowedQualities: ["web"],
+      },
+      {
+        albumId: album.id,
+        slug: "seed-expired",
+        mode: "public",
+        allowDownload: false,
+        allowedQualities: ["web"],
+        expiresAt: new Date("2026-01-01T00:00:00Z"),
+      },
+      {
+        albumId: album.id,
+        slug: "seed-expiring",
+        mode: "public",
+        allowDownload: false,
+        allowedQualities: ["web"],
+        expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      },
+      {
+        albumId: album.id,
+        slug: "seed-magic",
+        mode: "magic_link",
+        allowDownload: true,
+        allowedQualities: ["original", "web"],
+      },
+    ])
+    .returning({ id: shares.id, slug: shares.slug });
 
-  const [magicShare] = await db
-    .select({ id: shares.id })
-    .from(shares)
-    .where(eq(shares.slug, "seed-magic"))
-    .limit(1);
+  const shareIdBySlug = new Map(insertedShares.map((share) => [share.slug, share.id]));
+
+  // Visit fixtures so the organizer dashboard has non-zero counts. Recording views
+  // from the gallery is a separate backend feature; this only seeds the shape.
+  const HOUR = 60 * 60 * 1000;
+  const viewFixtures: Array<{ slug: string; count: number }> = [
+    { slug: "seed-public", count: 24 },
+    { slug: "seed-password", count: 9 },
+    { slug: "seed-magic", count: 4 },
+  ];
+
+  await db.insert(viewEvents).values(
+    viewFixtures.flatMap(({ slug, count }) => {
+      const shareId = shareIdBySlug.get(slug);
+      if (!shareId) {
+        return [];
+      }
+      return Array.from({ length: count }, (_, index) => ({
+        shareId,
+        visitorHash: createHash("sha256").update(`${slug}-visitor-${index}`).digest("hex"),
+        createdAt: new Date(Date.now() - (index * 6 + 1) * HOUR),
+      }));
+    }),
+  );
+
+  const magicShareId = shareIdBySlug.get("seed-magic");
+  if (!magicShareId) {
+    throw new Error("Seed shares were not created.");
+  }
 
   await db.insert(shareRecipients).values({
-    shareId: magicShare.id,
+    shareId: magicShareId,
     email: SEED_RECIPIENT_EMAIL,
     tokenHash: createHash("sha256").update(SEED_MAGIC_TOKEN).digest("hex"),
   });
@@ -212,7 +253,7 @@ async function main() {
   const [clientSession] = await db
     .insert(clientSessions)
     .values({
-      shareId: magicShare.id,
+      shareId: magicShareId,
       email: SEED_RECIPIENT_EMAIL,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
@@ -228,7 +269,8 @@ async function main() {
   console.log("Seed data ready:");
   console.log(`  admin:  ${SEED_ADMIN_EMAIL} / ${SEED_ADMIN_PASSWORD}`);
   console.log(`  album:  ${SEED_ALBUM_SLUG} (${PHOTO_COUNT} photos, status ready)`);
-  console.log("  shares: seed-public, seed-password, seed-expired, seed-magic");
+  console.log("  shares: seed-public, seed-password, seed-expired, seed-expiring, seed-magic");
+  console.log("  visits: 24 public · 9 password · 4 magic");
   console.log(`  share password: ${SEED_SHARE_PASSWORD}`);
   console.log(`  magic-link recipient: ${SEED_RECIPIENT_EMAIL} / ${SEED_MAGIC_TOKEN}`);
 }

@@ -23,9 +23,21 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
       status: "indexing" as const,
       coverPhotoId: null,
       photoCount: 0,
+      readyPhotoCount: 0,
+      shareCount: 0,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })),
     listAlbums: vi.fn(async () => []),
+    getOrganizerStats: vi.fn(async () => ({
+      albumCount: 0,
+      indexingAlbumCount: 0,
+      shareCount: 0,
+      expiringShareCount: 0,
+      indexedPhotoCount: 0,
+      failedPhotoCount: 0,
+      lastIndexedAt: null,
+    })),
     getAlbum: vi.fn(async () => ({
       id: "album-1",
       title: "Album",
@@ -151,6 +163,21 @@ describe("createAlbumService", () => {
     expect(await missing.reindex("nope")).toBe(false);
   });
 
+  it("returns organizer stats from the repository", async () => {
+    const stats = {
+      albumCount: 3,
+      indexingAlbumCount: 1,
+      shareCount: 5,
+      expiringShareCount: 2,
+      indexedPhotoCount: 120,
+      failedPhotoCount: 4,
+      lastIndexedAt: "2026-11-21T09:00:00.000Z",
+    };
+    const service = makeService(repository({ getOrganizerStats: vi.fn(async () => stats) }));
+
+    expect(await service.stats("user-1")).toEqual(stats);
+  });
+
   it("updates the title and branding for the owner only", async () => {
     const detail = {
       album: {
@@ -160,7 +187,10 @@ describe("createAlbumService", () => {
         status: "ready" as const,
         coverPhotoId: null,
         photoCount: 0,
+        readyPhotoCount: 0,
+        shareCount: 0,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
       folders: [],
       progress: { total: 0, ready: 0, pending: 0, failed: 0, missing: 0 },

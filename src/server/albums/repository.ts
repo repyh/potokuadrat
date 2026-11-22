@@ -4,10 +4,10 @@ import { and, asc, count, desc, eq, inArray, isNull, notInArray, sql } from "dri
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { AlbumIndexProgress, AlbumStatus, AlbumSummary } from "@/contracts/album";
-import type { AlbumDetail, AlbumFolderSummary } from "@/contracts/admin";
+import type { AlbumDetail, AlbumFolderSummary, OrganizerStats } from "@/contracts/admin";
 import type { BrandingOverride } from "@/contracts/branding";
 import * as schema from "@/server/db/schema";
-import { albumFolders, albums, driveFolders, photos } from "@/server/db/schema";
+import { albumFolders, albums, driveFolders, photos, shares } from "@/server/db/schema";
 
 export interface AlbumRecord {
   id: string;
@@ -55,6 +55,8 @@ export interface AlbumRepository {
   ensureDriveFolders(ownerUserId: string, folders: FolderInput[]): Promise<AlbumFolderRecord[]>;
   createAlbum(input: CreateAlbumRecordInput): Promise<AlbumSummary>;
   listAlbums(ownerUserId: string): Promise<AlbumSummary[]>;
+  /** Dashboard counters for the albums one organizer owns. */
+  getOrganizerStats(ownerUserId: string): Promise<OrganizerStats>;
   getAlbum(albumId: string): Promise<AlbumRecord | null>;
   getAlbumFolders(albumId: string): Promise<AlbumFolderRecord[]>;
   getAlbumDetail(albumId: string): Promise<AlbumDetail | null>;
@@ -87,8 +89,9 @@ function toSummary(
     status: AlbumStatus;
     coverPhotoId: string | null;
     createdAt: Date;
+    updatedAt: Date;
   },
-  photoCount: number,
+  counts: { photoCount: number; readyPhotoCount: number; shareCount: number },
 ): AlbumSummary {
   return {
     id: row.id,
@@ -96,8 +99,11 @@ function toSummary(
     title: row.title,
     status: row.status,
     coverPhotoId: row.coverPhotoId,
-    photoCount,
+    photoCount: counts.photoCount,
+    readyPhotoCount: counts.readyPhotoCount,
+    shareCount: counts.shareCount,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -229,7 +235,7 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
           );
         }
 
-        return toSummary(album, 0);
+        return toSummary(album, { photoCount: 0, readyPhotoCount: 0, shareCount: 0 });
       });
     },
 
@@ -242,7 +248,16 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
           status: albums.status,
           coverPhotoId: albums.coverPhotoId,
           createdAt: albums.createdAt,
+          updatedAt: albums.updatedAt,
           value: count(photos.id),
+          readyCount:
+            sql<number>`count(*) filter (where ${photos.thumbStatus} = 'ready' and ${photos.missingAt} is null)`.mapWith(
+              Number,
+            ),
+          shareCount:
+            sql<number>`(select count(*) from shares s where s.album_id = ${albums.id})`.mapWith(
+              Number,
+            ),
         })
         .from(albums)
         .leftJoin(photos, eq(photos.albumId, albums.id))
@@ -250,7 +265,71 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         .groupBy(albums.id)
         .orderBy(desc(albums.createdAt));
 
-      return rows.map((row) => toSummary(row, Number(row.value)));
+      return rows.map((row) =>
+        toSummary(row, {
+          photoCount: Number(row.value),
+          readyPhotoCount: row.readyCount,
+          shareCount: row.shareCount,
+        }),
+      );
+    },
+
+    async getOrganizerStats(ownerUserId) {
+      const [albumRow, shareRow, photoRow, driveRow] = await Promise.all([
+        db
+          .select({
+            albumCount: count(),
+            indexingAlbumCount:
+              sql<number>`count(*) filter (where ${albums.status} = 'indexing')`.mapWith(Number),
+          })
+          .from(albums)
+          .where(eq(albums.ownerUserId, ownerUserId)),
+        db
+          .select({
+            shareCount: count(),
+            expiringShareCount:
+              sql<number>`count(*) filter (
+                where ${shares.expiresAt} is not null
+                  and ${shares.expiresAt} > now()
+                  and ${shares.expiresAt} <= now() + interval '7 days'
+              )`.mapWith(Number),
+          })
+          .from(shares)
+          .innerJoin(albums, eq(shares.albumId, albums.id))
+          .where(eq(albums.ownerUserId, ownerUserId)),
+        db
+          .select({
+            indexedPhotoCount:
+              sql<number>`count(*) filter (where ${photos.thumbStatus} = 'ready' and ${photos.missingAt} is null)`.mapWith(
+                Number,
+              ),
+            failedPhotoCount:
+              sql<number>`count(*) filter (where ${photos.thumbStatus} = 'failed' and ${photos.missingAt} is null)`.mapWith(
+                Number,
+              ),
+          })
+          .from(photos)
+          .innerJoin(albums, eq(photos.albumId, albums.id))
+          .where(eq(albums.ownerUserId, ownerUserId)),
+        db
+          .select({
+            lastIndexedAt: sql<string | null>`max(${driveFolders.lastIndexedAt})`,
+          })
+          .from(driveFolders)
+          .where(eq(driveFolders.ownerUserId, ownerUserId)),
+      ]);
+
+      return {
+        albumCount: Number(albumRow[0]?.albumCount ?? 0),
+        indexingAlbumCount: albumRow[0]?.indexingAlbumCount ?? 0,
+        shareCount: Number(shareRow[0]?.shareCount ?? 0),
+        expiringShareCount: shareRow[0]?.expiringShareCount ?? 0,
+        indexedPhotoCount: photoRow[0]?.indexedPhotoCount ?? 0,
+        failedPhotoCount: photoRow[0]?.failedPhotoCount ?? 0,
+        lastIndexedAt: driveRow[0]?.lastIndexedAt
+          ? new Date(driveRow[0].lastIndexedAt).toISOString()
+          : null,
+      };
     },
 
     getAlbum,
@@ -271,6 +350,11 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
             status: albums.status,
             coverPhotoId: albums.coverPhotoId,
             createdAt: albums.createdAt,
+            updatedAt: albums.updatedAt,
+            shareCount:
+              sql<number>`(select count(*) from shares s where s.album_id = ${albums.id})`.mapWith(
+                Number,
+              ),
           })
           .from(albums)
           .where(eq(albums.id, albumId))
@@ -285,7 +369,11 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
       }
 
       return {
-        album: toSummary(summary, progress.total),
+        album: toSummary(summary, {
+          photoCount: progress.total,
+          readyPhotoCount: progress.ready,
+          shareCount: summary.shareCount,
+        }),
         folders: folders.map<AlbumFolderSummary>((folder) => ({
           id: folder.id,
           driveFolderId: folder.driveFolderId,

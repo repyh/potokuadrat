@@ -91,6 +91,8 @@ function toSummary(row: AdminShareRecord): ShareSummary {
     stripMetadata: row.stripMetadata,
     photoCount: row.photoCount > 0 ? row.photoCount : null,
     recipientCount: row.recipientCount,
+    visits: row.visits,
+    lastVisitAt: row.lastVisitAt ? new Date(row.lastVisitAt).toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }

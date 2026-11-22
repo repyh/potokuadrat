@@ -29,6 +29,9 @@ export interface AdminShareRecord {
   hasPassword: boolean;
   photoCount: number;
   recipientCount: number;
+  visits: number;
+  /** Raw aggregate value; Postgres returns timestamptz as text for `max()`. */
+  lastVisitAt: string | null;
 }
 
 export interface AdminRecipientRecord {
@@ -125,6 +128,12 @@ const shareColumns = {
     sql<number>`(select count(*) from share_recipients r where r.share_id = ${shares.id})`.mapWith(
       Number,
     ),
+  visits:
+    sql<number>`(select count(*) from view_events ve where ve.share_id = ${shares.id})`.mapWith(
+      Number,
+    ),
+  lastVisitAt:
+    sql<string | null>`(select max(ve.created_at) from view_events ve where ve.share_id = ${shares.id})`,
 };
 
 const recipientColumns = {
