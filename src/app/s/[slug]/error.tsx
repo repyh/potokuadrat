@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+
 import { Alert, Button } from "@/components/ui";
 
 export default function ShareError({
@@ -12,26 +13,40 @@ export default function ShareError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log unexpected error for diagnostics
+    // The message stays in the server log; the visitor only gets the digest.
     console.error("Gallery route error:", error);
   }, [error]);
 
   return (
     <div className="auth-page">
-      <section className="auth-panel text-center" aria-labelledby="share-error-heading">
+      <section className="auth-panel" aria-labelledby="share-error-heading">
         <p className="hero-eyebrow">Potokuadrat Folio</p>
-        <h1 id="share-error-heading">Unable to load folio</h1>
+        <h1 id="share-error-heading">This folio could not be opened</h1>
         <p className="auth-lede">
-          An unexpected error occurred while preparing this photographic collection.
+          Something went wrong while preparing this collection. The photographs have not been
+          changed.
         </p>
 
-        <div className="my-6 text-left">
-          <Alert tone="danger" title="Rendering Error">
-            {error.message || "An unknown error prevented the photographs from loading."}
-          </Alert>
-        </div>
+        <Alert tone="danger" title="The folio did not load">
+          Try again in a moment.{" "}
+          {error.digest ? (
+            <>
+              If it keeps failing, quote reference <code>{error.digest}</code> to the studio.
+            </>
+          ) : (
+            "If it keeps failing, ask the studio for a fresh link."
+          )}
+        </Alert>
 
-        <div className="flex justify-center gap-3">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "12px",
+            marginTop: "20px",
+          }}
+        >
           <Button variant="primary" onClick={reset}>
             Try again
           </Button>
