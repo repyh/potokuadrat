@@ -7,6 +7,7 @@ import type { PhotoPage } from "@/contracts/album";
 import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
 import { ShareAccessGate } from "@/features/share/share-access-gate";
 import { ShareGallery } from "@/features/share/share-gallery";
+import { getAnalyticsService } from "@/server/analytics/runtime";
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareAccess } from "@/server/shares/access";
 import { listFavorites } from "@/server/shares/favorites";
@@ -53,6 +54,10 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
     };
   }
 
+  // A gallery that is actually shown counts as one view. Gates and error states do not.
+  await getAnalyticsService().recordGalleryView(share.id, reqHeaders);
+
+
   const album: GalleryAlbum = {
     slug: share.albumSlug,
     title: share.albumTitle,
@@ -60,7 +65,6 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
     branding: share.albumBranding,
     photographerName: share.photographerName,
   };
-
   const policy: SharePolicy = {
     mode: share.mode,
     allowDownload: share.allowDownload,
