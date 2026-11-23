@@ -59,13 +59,20 @@ describe.skipIf(!databaseUrl)("share admin repository", () => {
     await closeDb();
   });
 
-  async function createShare(overrides: { photoIds?: string[] | null } = {}) {
+  async function createShare(
+    overrides: {
+      photoIds?: string[] | null;
+      albumId?: string;
+      mode?: "public" | "password" | "magic_link";
+      expiresAt?: Date | null;
+    } = {},
+  ) {
     return repository.createShare({
-      albumId: ALBUM_ID,
+      albumId: overrides.albumId ?? ALBUM_ID,
       slug: `share-${Math.random().toString(36).slice(2, 10)}`,
-      mode: "public",
+      mode: overrides.mode ?? "public",
       passwordHash: null,
-      expiresAt: null,
+      expiresAt: overrides.expiresAt ?? null,
       allowDownload: true,
       allowedQualities: ["original", "web"],
       stripMetadata: null,
@@ -119,6 +126,85 @@ describe.skipIf(!databaseUrl)("share admin repository", () => {
     expect(owned?.lastVisitAt && new Date(owned.lastVisitAt).toISOString()).toBe(
       latest.toISOString(),
     );
+  });
+
+
+  it("lists every owned share with album, filters, search, and paging", async () => {
+    const PROBE_ALBUM = "00000000-0000-4000-8000-0000000000a1";
+    const FOREIGN_ALBUM = "00000000-0000-4000-8000-0000000000a2";
+    await db.execute(
+      sql`INSERT INTO albums (id, slug, title, status, owner_user_id) VALUES (${PROBE_ALBUM}, 'index-probe', 'Index Probe', 'ready', 'user-1')`,
+    );
+    await db.execute(
+      sql`INSERT INTO albums (id, slug, title, status, owner_user_id) VALUES (${FOREIGN_ALBUM}, 'index-probe-foreign', 'Index Probe Foreign', 'ready', 'user-2')`,
+    );
+
+    const older = await createShare({ albumId: PROBE_ALBUM, mode: "password" });
+    const newer = await createShare({
+      albumId: PROBE_ALBUM,
+      expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    });
+    await createShare({ albumId: FOREIGN_ALBUM });
+
+    const first = await repository.listAll("user-1", {
+      search: "index probe",
+      sort: "newest",
+      offset: 0,
+      limit: 1,
+    });
+    expect(first.total).toBe(2);
+    expect(first.rows).toHaveLength(1);
+    expect(first.rows[0]).toMatchObject({
+      id: newer,
+      albumSlug: "index-probe",
+      albumTitle: "Index Probe",
+    });
+
+    const second = await repository.listAll("user-1", {
+      search: "index probe",
+      sort: "newest",
+      offset: 1,
+      limit: 1,
+    });
+    expect(second.rows.map((row) => row.id)).toEqual([older]);
+
+    const passwordOnly = await repository.listAll("user-1", {
+      search: "index probe",
+      mode: "password",
+      sort: "newest",
+      offset: 0,
+      limit: 10,
+    });
+    expect(passwordOnly.total).toBe(1);
+    expect(passwordOnly.rows[0].id).toBe(older);
+
+    const live = await repository.listAll("user-1", {
+      search: "index probe",
+      expired: false,
+      sort: "expiring",
+      offset: 0,
+      limit: 10,
+    });
+    expect(live.total).toBe(2);
+    expect(live.rows[0].id).toBe(newer);
+
+    const expired = await repository.listAll("user-1", {
+      search: "index probe",
+      expired: true,
+      sort: "newest",
+      offset: 0,
+      limit: 10,
+    });
+    expect(expired.total).toBe(0);
+
+    const foreign = await repository.listAll("user-2", {
+      search: "index probe",
+      sort: "newest",
+      offset: 0,
+      limit: 10,
+    });
+    expect(foreign.total).toBe(1);
+    expect(foreign.rows[0].albumSlug).toBe("index-probe-foreign");
   });
 
   it("lists shares only for the album owner", async () => {

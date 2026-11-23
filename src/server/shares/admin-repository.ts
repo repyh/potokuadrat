@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { BrandingOverride } from "@/contracts/branding";
-import type { DownloadQuality, ShareMode } from "@/contracts/share";
+import type { DownloadQuality, ShareIndexSort, ShareMode } from "@/contracts/share";
 import * as schema from "@/server/db/schema";
 import {
   albums,
@@ -48,6 +48,26 @@ export interface AdminShareDetailRecord extends AdminShareRecord {
   recipients: AdminRecipientRecord[];
 }
 
+/** One row of the cross-album organizer index. */
+export interface AdminShareIndexRecord extends AdminShareRecord {
+  albumTitle: string;
+  albumSlug: string;
+}
+
+export interface ShareIndexFilter {
+  mode?: ShareMode;
+  expired?: boolean;
+  search?: string;
+  sort: ShareIndexSort;
+  offset: number;
+  limit: number;
+}
+
+export interface AdminShareIndexResult {
+  rows: AdminShareIndexRecord[];
+  total: number;
+}
+
 export interface CreateShareRecord {
   albumId: string;
   slug: string;
@@ -83,6 +103,8 @@ export interface ShareAdminRepository {
   albumOwnedBy(albumId: string, ownerUserId: string): Promise<boolean>;
   findOwnedShare(shareId: string, ownerUserId: string): Promise<OwnedShareRecord | null>;
   listByAlbum(albumId: string, ownerUserId: string): Promise<AdminShareRecord[]>;
+  /** Every share the organizer owns, with album title and slug, filtered and paged. */
+  listAll(ownerUserId: string, filter: ShareIndexFilter): Promise<AdminShareIndexResult>;
   findDetail(shareId: string, ownerUserId: string): Promise<AdminShareDetailRecord | null>;
   createShare(record: CreateShareRecord): Promise<string>;
   updateShare(shareId: string, patch: UpdateShareRecord): Promise<void>;
@@ -187,6 +209,54 @@ export function createDrizzleShareAdminRepository(db: Database): ShareAdminRepos
         .innerJoin(albums, eq(shares.albumId, albums.id))
         .where(and(eq(shares.albumId, albumId), eq(albums.ownerUserId, ownerUserId)))
         .orderBy(desc(shares.createdAt));
+    },
+
+    async listAll(ownerUserId, filter) {
+      const conditions = [eq(albums.ownerUserId, ownerUserId)];
+
+      if (filter.mode) {
+        conditions.push(eq(shares.mode, filter.mode));
+      }
+
+      if (filter.expired === true) {
+        conditions.push(and(isNotNull(shares.expiresAt), lte(shares.expiresAt, sql`now()`))!);
+      } else if (filter.expired === false) {
+        conditions.push(or(isNull(shares.expiresAt), gt(shares.expiresAt, sql`now()`))!);
+      }
+
+      const needle = filter.search?.trim();
+      if (needle) {
+        const pattern = `%${needle}%`;
+        conditions.push(or(ilike(albums.title, pattern), ilike(albums.slug, pattern))!);
+      }
+
+      const where = and(...conditions);
+      const order =
+        filter.sort === "expiring"
+          ? [sql`${shares.expiresAt} asc nulls last`, desc(shares.id)]
+          : [desc(shares.createdAt), desc(shares.id)];
+
+      const [rows, totalRow] = await Promise.all([
+        db
+          .select({
+            ...shareColumns,
+            albumTitle: albums.title,
+            albumSlug: albums.slug,
+          })
+          .from(shares)
+          .innerJoin(albums, eq(shares.albumId, albums.id))
+          .where(where)
+          .orderBy(...order)
+          .limit(filter.limit)
+          .offset(filter.offset),
+        db
+          .select({ value: sql<number>`count(*)`.mapWith(Number) })
+          .from(shares)
+          .innerJoin(albums, eq(shares.albumId, albums.id))
+          .where(where),
+      ]);
+
+      return { rows, total: totalRow[0]?.value ?? 0 };
     },
 
     async findDetail(shareId, ownerUserId) {
