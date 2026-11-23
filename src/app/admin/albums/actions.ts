@@ -9,13 +9,14 @@ import type {
   SetAlbumCoverInput,
   UpdateAlbumInput,
 } from "@/contracts/admin";
-import type { AlbumSummary } from "@/contracts/album";
+import type { AlbumPhotosResponse, AlbumSummary, ReorderAlbumPhotosInput } from "@/contracts/album";
 import { getAdminSession } from "@/server/auth/api";
 import { AlbumValidationError } from "@/server/albums/service";
 import { getAlbumService } from "@/server/albums/runtime";
 import {
   albumIdSchema,
   createAlbumSchema,
+  reorderAlbumPhotosSchema,
   setAlbumCoverSchema,
   updateAlbumSchema,
 } from "@/server/albums/validation";
@@ -97,6 +98,45 @@ export async function reindexAlbumAction(
     revalidatePath("/admin");
     refreshAlbumPages(parsed.data);
     return { ok: true, data: { albumId: parsed.data } };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function reorderAlbumPhotosAction(
+  albumId: string,
+  input: ReorderAlbumPhotosInput,
+): Promise<ActionResult<AlbumPhotosResponse>> {
+  const userId = await adminUserId();
+  if (!userId) {
+    return UNAUTHORIZED;
+  }
+
+  const parsedId = albumIdSchema.safeParse(albumId);
+  if (!parsedId.success) {
+    return notFound("Album not found.");
+  }
+
+  const parsed = reorderAlbumPhotosSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Check the photo order.",
+      code: "validation",
+    };
+  }
+
+  try {
+    const result = await getAlbumService().reorderPhotos(
+      userId,
+      parsedId.data,
+      parsed.data.photoIds,
+    );
+    if (!result) {
+      return notFound("Album not found.");
+    }
+    refreshAlbumPages(parsedId.data);
+    return { ok: true, data: result };
   } catch (error) {
     return failed(error);
   }

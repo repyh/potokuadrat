@@ -67,3 +67,13 @@ export interface AlbumIndexProgress {
   failed: number;
   missing: number;
 }
+
+/** Admin photo list for the album detail grid, ordered by `sortIndex`. */
+export interface AlbumPhotosResponse {
+  photos: Photo[];
+}
+
+export interface ReorderAlbumPhotosInput {
+  /** Every visible photo id of the album, in the new order. */
+  photoIds: string[];
+}

@@ -50,6 +50,15 @@ export const updateAlbumSchema = z
   })
   .strict();
 
+export const reorderAlbumPhotosSchema = z
+  .object({
+    photoIds: z
+      .array(z.string().uuid("Photo not found."))
+      .min(1, "No photos to order.")
+      .max(1000, "That is too many photos to order at once."),
+  })
+  .strict();
+
 export const setAlbumCoverSchema = z
   .object({ photoId: z.string().uuid("Photo not found.").nullable() })
   .strict();
