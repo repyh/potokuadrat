@@ -4,6 +4,8 @@ import type {
   CreateShareInput,
   IssuedMagicLink,
   ShareDetail,
+  ShareIndexPage,
+  ShareIndexQuery,
   ShareRecipientSummary,
   ShareSummary,
   UpdateShareInput,
@@ -47,6 +49,8 @@ export interface CreateShareResult {
 
 export interface ShareAdminService {
   list(ownerUserId: string, albumId: string): Promise<ShareSummary[]>;
+  /** Cross-album index for the organizer; clamps page and limit. */
+  listAll(ownerUserId: string, query?: ShareIndexQuery): Promise<ShareIndexPage>;
   detail(ownerUserId: string, shareId: string): Promise<ShareDetail | null>;
   create(ownerUserId: string, albumId: string, input: CreateShareInput): Promise<CreateShareResult>;
   update(ownerUserId: string, shareId: string, input: UpdateShareInput): Promise<ShareDetail>;
@@ -206,6 +210,32 @@ export function createShareAdminService(deps: ShareAdminDeps): ShareAdminService
 
       const rows = await deps.repository.listByAlbum(albumId, ownerUserId);
       return rows.map(toSummary);
+    },
+
+    async listAll(ownerUserId, query = {}) {
+      const page = Math.max(1, Math.trunc(query.page ?? 1));
+      const limit = Math.min(50, Math.max(1, Math.trunc(query.limit ?? 20)));
+      const sort = query.sort === "expiring" ? "expiring" : "newest";
+
+      const { rows, total } = await deps.repository.listAll(ownerUserId, {
+        mode: query.mode,
+        expired: query.expired,
+        search: query.search,
+        sort,
+        offset: (page - 1) * limit,
+        limit,
+      });
+
+      return {
+        shares: rows.map((row) => ({
+          ...toSummary(row),
+          albumTitle: row.albumTitle,
+          albumSlug: row.albumSlug,
+        })),
+        total,
+        page,
+        limit,
+      };
     },
 
     async detail(ownerUserId, shareId) {

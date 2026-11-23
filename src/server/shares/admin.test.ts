@@ -58,6 +58,10 @@ function repository(overrides: Partial<ShareAdminRepository> = {}): ShareAdminRe
       hasPassword: false,
     })),
     listByAlbum: vi.fn(async () => [summary]),
+    listAll: vi.fn(async () => ({
+      rows: [{ ...summary, albumTitle: "Album", albumSlug: "album" }],
+      total: 1,
+    })),
     findDetail: vi.fn(async () => detailRow()),
     createShare: vi.fn(async () => SHARE_ID),
     updateShare: vi.fn(async () => {}),
@@ -83,6 +87,59 @@ function build(overrides: Partial<ShareAdminRepository> = {}) {
 
   return { repo, service, hashPassword };
 }
+
+describe("share index", () => {
+  it("maps album title and slug onto the row", async () => {
+    const { service } = build();
+
+    const page = await service.listAll("user-1", { page: 2, limit: 5 });
+
+    expect(page).toMatchObject({ total: 1, page: 2, limit: 5 });
+    expect(page.shares[0]).toMatchObject({
+      albumTitle: "Album",
+      albumSlug: "album",
+      id: SHARE_ID,
+      visits: 0,
+    });
+  });
+
+  it("clamps the page and limit and defaults the sort to newest", async () => {
+    const { repo, service } = build();
+
+    await service.listAll("user-1", { page: 0, limit: 500 });
+
+    expect(repo.listAll).toHaveBeenCalledWith("user-1", {
+      mode: undefined,
+      expired: undefined,
+      search: undefined,
+      sort: "newest",
+      offset: 0,
+      limit: 50,
+    });
+  });
+
+  it("passes filters through to the repository", async () => {
+    const { repo, service } = build();
+
+    await service.listAll("user-1", {
+      mode: "magic_link",
+      expired: false,
+      search: "harbour",
+      sort: "expiring",
+      page: 3,
+      limit: 10,
+    });
+
+    expect(repo.listAll).toHaveBeenCalledWith("user-1", {
+      mode: "magic_link",
+      expired: false,
+      search: "harbour",
+      sort: "expiring",
+      offset: 20,
+      limit: 10,
+    });
+  });
+});
 
 describe("list and detail", () => {
   it("rejects an album owned by someone else", async () => {

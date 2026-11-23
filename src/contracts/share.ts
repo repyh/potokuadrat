@@ -89,6 +89,35 @@ export interface ShareSummary {
   createdAt: string;
 }
 
+export const SHARE_INDEX_SORTS = ["newest", "expiring"] as const;
+export type ShareIndexSort = (typeof SHARE_INDEX_SORTS)[number];
+
+/** A share in the cross-album organizer index; it carries the album it belongs to. */
+export interface ShareIndexRow extends ShareSummary {
+  albumTitle: string;
+  albumSlug: string;
+}
+
+export interface ShareIndexQuery {
+  mode?: ShareMode;
+  /** true returns only expired links, false only live ones; omit for all. */
+  expired?: boolean;
+  /** Matches the album title or slug. */
+  search?: string;
+  sort?: ShareIndexSort;
+  /** 1-based page number. */
+  page?: number;
+  limit?: number;
+}
+
+export interface ShareIndexPage {
+  shares: ShareIndexRow[];
+  /** Rows matching the filters, not the page size. */
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface ShareDetail extends ShareSummary {
   branding: BrandingOverride | null;
   /** null keeps the whole album, so new photos appear after a re-index. */
