@@ -3,9 +3,10 @@ import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { AlbumIndexProgress, AlbumStatus, AlbumSummary } from "@/contracts/album";
+import type { AlbumIndexProgress, AlbumStatus, AlbumSummary, Photo } from "@/contracts/album";
 import type { AlbumDetail, AlbumFolderSummary, OrganizerStats } from "@/contracts/admin";
 import type { BrandingOverride } from "@/contracts/branding";
+import { orientationFor } from "@/server/photos/orientation";
 import * as schema from "@/server/db/schema";
 import { albumFolders, albums, driveFolders, photos, shares } from "@/server/db/schema";
 
@@ -60,6 +61,10 @@ export interface AlbumRepository {
   getAlbum(albumId: string): Promise<AlbumRecord | null>;
   getAlbumFolders(albumId: string): Promise<AlbumFolderRecord[]>;
   getAlbumDetail(albumId: string): Promise<AlbumDetail | null>;
+  /** Visible photos in manual order. */
+  listAlbumPhotos(albumId: string): Promise<Photo[]>;
+  /** Rewrites sort_index from the given order; ids are validated by the service. */
+  setPhotoOrder(albumId: string, photoIds: string[]): Promise<void>;
   setStatus(albumId: string, status: AlbumStatus): Promise<void>;
   updateAlbum(
     albumId: string,
@@ -382,6 +387,51 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
         })),
         progress,
       };
+    },
+
+    async listAlbumPhotos(albumId) {
+      const rows = await db
+        .select({
+          id: photos.id,
+          name: photos.name,
+          width: photos.width,
+          height: photos.height,
+          bytes: photos.bytes,
+          thumbStatus: photos.thumbStatus,
+          takenAt: photos.takenAt,
+          sortIndex: photos.sortIndex,
+        })
+        .from(photos)
+        .where(and(eq(photos.albumId, albumId), isNull(photos.missingAt)))
+        .orderBy(asc(photos.sortIndex), asc(photos.id));
+
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        width: row.width,
+        height: row.height,
+        bytes: row.bytes,
+        orientation: orientationFor(row.width, row.height),
+        thumbStatus: row.thumbStatus,
+        takenAt: row.takenAt ? row.takenAt.toISOString() : null,
+        sortIndex: row.sortIndex,
+      }));
+    },
+
+    async setPhotoOrder(albumId, photoIds) {
+      if (photoIds.length === 0) {
+        return;
+      }
+
+      await db.transaction(async (tx) => {
+        const at = new Date();
+        for (const [index, photoId] of photoIds.entries()) {
+          await tx
+            .update(photos)
+            .set({ sortIndex: index, updatedAt: at })
+            .where(and(eq(photos.id, photoId), eq(photos.albumId, albumId)));
+        }
+      });
     },
 
     async markFoldersIndexed(folderIds, at) {

@@ -14,6 +14,7 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
         driveFolderId: folder.driveFolderId,
         name: folder.name,
         recursive: folder.recursive,
+        lastIndexedAt: null,
       })),
     ),
     createAlbum: vi.fn(async (input) => ({
@@ -62,6 +63,8 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
       failed: 0,
       missing: 0,
     })),
+    listAlbumPhotos: vi.fn(async () => []),
+    setPhotoOrder: vi.fn(async () => {}),
     ...overrides,
   } as AlbumRepository;
 }
@@ -269,6 +272,90 @@ describe("createAlbumService", () => {
 
     expect(await service.remove("user-2", "album-1")).toBe(false);
     expect(repo.deleteAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the album photos for the owner only", async () => {
+    const photos = [
+      {
+        id: "photo-1",
+        name: "TOP2.jpg",
+        width: 6000,
+        height: 4000,
+        bytes: 100,
+        orientation: "landscape" as const,
+        thumbStatus: "ready" as const,
+        takenAt: null,
+        sortIndex: 0,
+      },
+    ];
+    const repo = repository({ listAlbumPhotos: vi.fn(async () => photos) });
+    const service = makeService(repo);
+
+    expect(await service.photos("user-1", "album-1")).toEqual({ photos });
+    expect(
+      await makeService(
+        repository({
+          getAlbum: vi.fn(async () => ({
+            id: "album-1",
+            title: "Album",
+            slug: "album",
+            ownerUserId: "user-2",
+            status: "ready" as const,
+          })),
+        }),
+      ).photos("user-1", "album-1"),
+    ).toBeNull();
+  });
+
+  it("rewrites the order only when the ids match the album", async () => {
+    const photos = [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "a.jpg",
+        width: 10,
+        height: 10,
+        bytes: 1,
+        orientation: "landscape" as const,
+        thumbStatus: "ready" as const,
+        takenAt: null,
+        sortIndex: 0,
+      },
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        name: "b.jpg",
+        width: 10,
+        height: 10,
+        bytes: 1,
+        orientation: "landscape" as const,
+        thumbStatus: "ready" as const,
+        takenAt: null,
+        sortIndex: 1,
+      },
+    ];
+    const setPhotoOrder = vi.fn(async () => {});
+    const service = makeService(
+      repository({ listAlbumPhotos: vi.fn(async () => photos), setPhotoOrder }),
+    );
+
+    const order = [
+      "22222222-2222-4222-8222-222222222222",
+      "11111111-1111-4111-8111-111111111111",
+    ];
+    await service.reorderPhotos("user-1", "album-1", order);
+    expect(setPhotoOrder).toHaveBeenCalledWith("album-1", order);
+
+    await expect(
+      service.reorderPhotos("user-1", "album-1", [order[0]]),
+    ).rejects.toBeInstanceOf(AlbumValidationError);
+    await expect(
+      service.reorderPhotos("user-1", "album-1", [order[0], order[0]]),
+    ).rejects.toBeInstanceOf(AlbumValidationError);
+    await expect(
+      service.reorderPhotos("user-1", "album-1", [
+        order[0],
+        "33333333-3333-4333-8333-333333333333",
+      ]),
+    ).rejects.toBeInstanceOf(AlbumValidationError);
   });
 
   it("validates the cover photo and clears it with null", async () => {

@@ -8,6 +8,7 @@ import type {
   OrganizerStats,
   UpdateAlbumInput,
 } from "@/contracts/admin";
+import type { AlbumPhotosResponse } from "@/contracts/album";
 import { DriveError, parseDriveFolderInput, type DriveClient } from "@/server/drive/client";
 
 import type { AlbumRepository, FolderInput } from "./repository";
@@ -47,6 +48,14 @@ export interface AlbumService {
     input: UpdateAlbumInput,
   ): Promise<AlbumDetail | null>;
   remove(ownerUserId: string, albumId: string): Promise<boolean>;
+  /** Visible photos in manual order; null when the album is not the caller's. */
+  photos(ownerUserId: string, albumId: string): Promise<AlbumPhotosResponse | null>;
+  /** Rewrites the manual order; null when the album is not the caller's. */
+  reorderPhotos(
+    ownerUserId: string,
+    albumId: string,
+    photoIds: string[],
+  ): Promise<AlbumPhotosResponse | null>;
   /** Returns null when the album is missing or belongs to someone else. */
   setCover(
     ownerUserId: string,
@@ -186,6 +195,36 @@ export function createAlbumService(deps: AlbumServiceDeps): AlbumService {
 
       await deps.repository.deleteAlbum(albumId);
       return true;
+    },
+
+    async photos(ownerUserId, albumId) {
+      const album = await deps.repository.getAlbum(albumId);
+      if (!album || album.ownerUserId !== ownerUserId) {
+        return null;
+      }
+      return { photos: await deps.repository.listAlbumPhotos(albumId) };
+    },
+
+    async reorderPhotos(ownerUserId, albumId, photoIds) {
+      const album = await deps.repository.getAlbum(albumId);
+      if (!album || album.ownerUserId !== ownerUserId) {
+        return null;
+      }
+
+      const current = await deps.repository.listAlbumPhotos(albumId);
+      const order = new Set(photoIds);
+      const known = new Set(current.map((photo) => photo.id));
+      const matches =
+        order.size === photoIds.length &&
+        photoIds.length === current.length &&
+        photoIds.every((id) => known.has(id));
+
+      if (!matches) {
+        throw new AlbumValidationError("The photo order does not match this album.");
+      }
+
+      await deps.repository.setPhotoOrder(albumId, photoIds);
+      return { photos: await deps.repository.listAlbumPhotos(albumId) };
     },
 
     async setCover(ownerUserId, albumId, photoId) {

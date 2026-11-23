@@ -256,6 +256,29 @@ describe.skipIf(!databaseUrl)("album repository", () => {
     const progress = await repository.countProgress(album.id);
     expect(progress.total).toBe(2);
   });
+  it("lists photos in manual order and rewrites the order", async () => {
+    const [album] = await repository.listAlbums("user-1");
+    const before = await repository.listAlbumPhotos(album.id);
+
+    expect(before.length).toBeGreaterThan(1);
+    expect(before.map((photo) => photo.sortIndex)).toEqual(
+      before.map((_, index) => index),
+    );
+
+    const reversed = before.map((photo) => photo.id).reverse();
+    await repository.setPhotoOrder(album.id, reversed);
+
+    const after = await repository.listAlbumPhotos(album.id);
+    expect(after.map((photo) => photo.id)).toEqual(reversed);
+    expect(after.map((photo) => photo.sortIndex)).toEqual(
+      reversed.map((_, index) => index),
+    );
+
+    await repository.markMissingPhotos(album.id, [reversed[0]]);
+    const visible = await repository.listAlbumPhotos(album.id);
+    expect(visible.map((photo) => photo.id)).not.toContain(reversed[0]);
+  });
+
   it("cascades photos, shares, sessions, and favorites on delete", async () => {
     const [album] = await repository.listAlbums("user-1");
     const [photo] = await db
