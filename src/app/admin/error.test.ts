@@ -7,8 +7,8 @@ import AdminError from "./error";
 const SECRET = "connect ECONNREFUSED 172.18.0.2:5432";
 const DIGEST = "4182374981";
 
-function render(error: Error & { digest?: string }): string {
-  return renderToStaticMarkup(createElement(AdminError, { error, reset: () => {} }));
+function render(error: unknown): string {
+  return renderToStaticMarkup(createElement(AdminError, { error, retry: () => {} }));
 }
 
 describe("admin error boundary", () => {
@@ -27,5 +27,12 @@ describe("admin error boundary", () => {
     expect(markup).not.toContain(SECRET);
     expect(markup).toContain("Reload dashboard");
     expect(markup).toContain("server log");
+  });
+
+  it("survives a thrown value that is not an Error", () => {
+    const markup = render("database exploded");
+
+    expect(markup).not.toContain("database exploded");
+    expect(markup).toContain("Dashboard unavailable");
   });
 });

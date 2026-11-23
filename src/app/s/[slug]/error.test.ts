@@ -7,8 +7,8 @@ import ShareError from "./error";
 const SECRET = "connect ECONNREFUSED 172.18.0.2:5432";
 const DIGEST = "4182374981";
 
-function render(error: Error & { digest?: string }): string {
-  return renderToStaticMarkup(createElement(ShareError, { error, reset: () => {} }));
+function render(error: unknown): string {
+  return renderToStaticMarkup(createElement(ShareError, { error, retry: () => {} }));
 }
 
 describe("guest folio error boundary", () => {
@@ -27,5 +27,12 @@ describe("guest folio error boundary", () => {
     expect(markup).not.toContain(SECRET);
     expect(markup).toContain("Try again");
     expect(markup).toContain('href="/"');
+  });
+
+  it("survives a thrown value that is not an Error", () => {
+    const markup = render("database exploded");
+
+    expect(markup).not.toContain("database exploded");
+    expect(markup).toContain("This folio could not be opened");
   });
 });

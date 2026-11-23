@@ -5,17 +5,25 @@ import Link from "next/link";
 
 import { Alert, Button } from "@/components/ui";
 
+/**
+ * Next passes `retry` to an error boundary; it re-fetches and re-renders the
+ * failed segment, which `reset` does not do. A Server Component that failed on
+ * a database read only recovers through `retry`.
+ */
 export default function ShareError({
   error,
-  reset,
+  retry,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: unknown;
+  retry: () => void;
 }) {
   useEffect(() => {
     // The message stays in the server log; the visitor only gets the digest.
     console.error("Gallery route error:", error);
   }, [error]);
+
+  const digest =
+    error instanceof Error ? (error as Error & { digest?: string }).digest : undefined;
 
   return (
     <div className="auth-page">
@@ -29,9 +37,9 @@ export default function ShareError({
 
         <Alert tone="danger" title="The folio did not load">
           Try again in a moment.{" "}
-          {error.digest ? (
+          {digest ? (
             <>
-              If it keeps failing, quote reference <code>{error.digest}</code> to the studio.
+              If it keeps failing, quote reference <code>{digest}</code> to the studio.
             </>
           ) : (
             "If it keeps failing, ask the studio for a fresh link."
@@ -47,7 +55,7 @@ export default function ShareError({
             marginTop: "20px",
           }}
         >
-          <Button variant="primary" onClick={reset}>
+          <Button variant="primary" onClick={retry}>
             Try again
           </Button>
           <Link href="/" className="ui-btn ui-btn-secondary ui-btn-md">
