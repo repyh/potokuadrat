@@ -4,9 +4,10 @@ import { useCallback, useMemo, useState } from "react";
 
 import type { Photo, PhotoFilter, PhotoPage } from "@/contracts/album";
 import type { DownloadQuality, GalleryAlbum, SharePolicy } from "@/contracts/share";
-import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
+import { Alert, Button, EmptyState } from "@/components/ui";
 
 import { ShareDownloadDialog } from "./share-download-dialog";
+import { ShareGridSkeleton } from "./share-grid-skeleton";
 import { ShareLightbox } from "./share-lightbox";
 import { useShareFavorites } from "./use-share-favorites";
 
@@ -217,13 +218,7 @@ export function ShareGallery({
       )}
 
       {loadingFilter ? (
-        <div className="share-grid" aria-busy="true" aria-label="Loading photographs">
-          {Array.from({ length: 8 }, (_, idx) => (
-            <div key={idx} className="share-tile share-tile-skeleton">
-              <Skeleton height="220px" />
-            </div>
-          ))}
-        </div>
+        <ShareGridSkeleton label="Loading photographs" />
       ) : visiblePhotos.length === 0 ? (
         <EmptyState
           title={
