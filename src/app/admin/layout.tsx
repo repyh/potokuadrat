@@ -15,10 +15,17 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   await connection();
   const session = await requireAdmin();
 
-  const [organization] = await getDb()
-    .select({ name: organizations.name, title: organizations.title })
-    .from(organizations)
-    .limit(1);
+  // A failed lookup must not take the whole shell down: the name falls back and
+  // the page's own query surfaces the error inside the segment boundary.
+  let organization: { name: string; title: string | null } | undefined;
+  try {
+    [organization] = await getDb()
+      .select({ name: organizations.name, title: organizations.title })
+      .from(organizations)
+      .limit(1);
+  } catch (error) {
+    console.error("[admin] organization lookup failed:", error);
+  }
 
   const organizationName =
     organization?.title?.trim() || organization?.name?.trim() || "Potokuadrat";
