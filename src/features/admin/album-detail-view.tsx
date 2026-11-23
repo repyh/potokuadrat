@@ -20,7 +20,7 @@ import {
   reindexAlbumAction,
   updateAlbumAction,
 } from "@/app/admin/albums/actions";
-import { createShareAction, deleteShareAction } from "@/app/admin/shares/actions";
+import { createShareAction } from "@/app/admin/shares/actions";
 import {
   Alert,
   Breadcrumbs,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui";
 
 import { formatCount, formatDay } from "./format";
+import { ShareRevokeDialog } from "./share-revoke-dialog";
 import { extractDriveFolderId } from "./drive-folder";
 
 export interface AlbumDetailViewProps {
@@ -79,7 +80,6 @@ export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<ShareSummary | null>(null);
-  const [revoking, setRevoking] = useState(false);
   const [feedback, setFeedback] = useState<{
     tone: "success" | "danger";
     title: string;
@@ -307,28 +307,6 @@ export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
       tone: "success",
       title: "Share link created",
       message: `Share /s/${result.data.share.slug} is ready.`,
-    });
-    router.refresh();
-  };
-
-  const handleRevokeShare = async () => {
-    if (!revokeTarget || revoking) {
-      return;
-    }
-
-    setRevoking(true);
-    const result = await deleteShareAction(revokeTarget.id);
-    setRevoking(false);
-    setRevokeTarget(null);
-
-    if (!result.ok) {
-      setFeedback({ tone: "danger", title: "Revoke failed", message: result.error });
-      return;
-    }
-    setFeedback({
-      tone: "success",
-      title: "Share revoked",
-      message: "The share link has been deleted.",
     });
     router.refresh();
   };
@@ -749,41 +727,23 @@ export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
         </form>
       </Dialog>
 
-      <Dialog
-        open={revokeTarget !== null}
-        onClose={() => {
-          if (!revoking) {
-            setRevokeTarget(null);
+      <ShareRevokeDialog
+        share={revokeTarget}
+        onClose={() => setRevokeTarget(null)}
+        onDone={(result) => {
+          setRevokeTarget(null);
+          if (result.ok) {
+            setFeedback({
+              tone: "success",
+              title: "Share revoked",
+              message: "The share link has been deleted.",
+            });
+            router.refresh();
+            return;
           }
+          setFeedback({ tone: "danger", title: "Revoke failed", message: result.error });
         }}
-        title="Revoke this share?"
-        description="The link stops working immediately. Visits, favorites, and downloads stay in analytics."
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => setRevokeTarget(null)}
-              disabled={revoking}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              loading={revoking}
-              onClick={() => void handleRevokeShare()}
-            >
-              Revoke share
-            </Button>
-          </>
-        }
-      >
-        {revokeTarget && (
-          <p className="admin-empty-copy">
-            <code>/s/{revokeTarget.slug}</code> · {MODE_LABELS[revokeTarget.mode]} ·{" "}
-            {formatCount(revokeTarget.visits)} visits
-          </p>
-        )}
-      </Dialog>
+      />
 
       <Dialog
         open={deleteDialogOpen}
