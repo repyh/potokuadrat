@@ -33,7 +33,8 @@ export function parseFavoriteIds(raw: string): string[] {
 export interface UseShareFavoritesResult {
   favoriteIds: Set<string>;
   favoriteList: string[];
-  toggleFavorite: (photoId: string) => Promise<void>;
+  /** Resolves true when the change was saved, false when it was rolled back. */
+  toggleFavorite: (photoId: string) => Promise<boolean>;
   error: string | null;
 }
 
@@ -68,10 +69,11 @@ export function useShareFavorites(
         try {
           window.localStorage.setItem(storageKey(slug), JSON.stringify(next));
           window.dispatchEvent(new Event(LOCAL_EVENT));
+          return true;
         } catch {
           setError("Unable to save favorites in this browser.");
+          return false;
         }
-        return;
       }
 
       setServerIds(next);
@@ -85,14 +87,16 @@ export function useShareFavorites(
           const body = (await response.json().catch(() => null)) as { error?: string } | null;
           setServerIds(ids);
           setError(body?.error ?? "Unable to update favorite.");
-          return;
+          return false;
         }
 
         const data = (await response.json()) as FavoritesResponse;
         setServerIds(data.photoIds);
+        return true;
       } catch {
         setServerIds(ids);
         setError("Unable to update favorite. Please try again.");
+        return false;
       }
     },
     [ids, mode, slug],
