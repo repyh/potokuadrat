@@ -19,7 +19,7 @@ function subscribeLocalFavorites(callback: () => void): () => void {
   };
 }
 
-function parseFavoriteIds(raw: string): string[] {
+export function parseFavoriteIds(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)

@@ -19,14 +19,18 @@ export interface ShareGalleryProps {
   initialFavoriteIds?: string[];
 }
 
-const FILTER_LABELS: Record<PhotoFilter, string> = {
+export const FILTER_LABELS: Record<PhotoFilter, string> = {
   all: "All",
   favorites: "Favorites",
   landscape: "Landscape",
   portrait: "Portrait",
 };
 
-function formatExpiry(expiresAt: string | null): string | null {
+export function resolvePreferredQuality(allowedQualities: DownloadQuality[]): DownloadQuality {
+  return allowedQualities.includes("original") ? "original" : (allowedQualities[0] ?? "web");
+}
+
+export function formatExpiry(expiresAt: string | null): string | null {
   if (!expiresAt) {
     return null;
   }
@@ -51,6 +55,7 @@ export function ShareGallery({
   const [filter, setFilter] = useState<PhotoFilter>("all");
   const [photos, setPhotos] = useState<Photo[]>(initialPage.photos);
   const [nextCursor, setNextCursor] = useState<string | null>(initialPage.nextCursor);
+  const [filterTotal, setFilterTotal] = useState<number>(initialPage.total);
   const [loadingFilter, setLoadingFilter] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -60,9 +65,7 @@ export function ShareGallery({
   const { favoriteIds, favoriteList, toggleFavorite, error: favoriteError } =
     useShareFavorites(slug, policy.mode, initialFavoriteIds);
 
-  const preferredQuality: DownloadQuality = policy.allowedQualities.includes("original")
-    ? "original"
-    : (policy.allowedQualities[0] ?? "web");
+  const preferredQuality: DownloadQuality = resolvePreferredQuality(policy.allowedQualities);
 
   const visiblePhotos = useMemo(() => {
     if (filter === "favorites" && policy.mode !== "magic_link") {
@@ -77,13 +80,52 @@ export function ShareGallery({
       setFetchError(null);
       setLightboxIndex(null);
 
-      if (nextFilter === "favorites" && policy.mode !== "magic_link") {
-        return;
-      }
-
       if (nextFilter === "all") {
         setPhotos(initialPage.photos);
         setNextCursor(initialPage.nextCursor);
+        setFilterTotal(initialPage.total);
+        return;
+      }
+
+      // For public/password favorites: fetch all remaining pages so the client-side
+      // filter covers the entire share, not just the loaded page.
+      if (nextFilter === "favorites" && policy.mode !== "magic_link") {
+        // If everything is already loaded (no next cursor) just filter in-place.
+        if (!initialPage.nextCursor) {
+          setFilterTotal(favoriteIds.size);
+          return;
+        }
+
+        setLoadingFilter(true);
+        try {
+          let cursor: string | null = initialPage.nextCursor;
+          let allPhotos = [...initialPage.photos];
+
+          while (cursor) {
+            const params = new URLSearchParams({ filter: "all", cursor, limit: "50" });
+            const response = await fetch(
+              `/api/share/${encodeURIComponent(slug)}/photos?${params.toString()}`,
+            );
+
+            if (!response.ok) {
+              const body = (await response.json().catch(() => null)) as { error?: string } | null;
+              setFetchError(body?.error ?? "Unable to load all photos for favorites.");
+              return;
+            }
+
+            const page = (await response.json()) as PhotoPage;
+            allPhotos = [...allPhotos, ...page.photos];
+            cursor = page.nextCursor;
+          }
+
+          setPhotos(allPhotos);
+          setNextCursor(null); // All pages loaded; "Load more" is no longer needed.
+          setFilterTotal(favoriteIds.size);
+        } catch {
+          setFetchError("Unable to load all photos for favorites.");
+        } finally {
+          setLoadingFilter(false);
+        }
         return;
       }
 
@@ -103,13 +145,14 @@ export function ShareGallery({
         const page = (await response.json()) as PhotoPage;
         setPhotos(page.photos);
         setNextCursor(page.nextCursor);
+        setFilterTotal(page.total);
       } catch {
         setFetchError("Unable to load filtered photos.");
       } finally {
         setLoadingFilter(false);
       }
     },
-    [initialPage.nextCursor, initialPage.photos, policy.mode, slug],
+    [favoriteIds, initialPage.nextCursor, initialPage.photos, initialPage.total, policy.mode, slug],
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -142,6 +185,7 @@ export function ShareGallery({
       const page = (await response.json()) as PhotoPage;
       setPhotos((prev) => [...prev, ...page.photos]);
       setNextCursor(page.nextCursor);
+      setFilterTotal(page.total);
     } catch {
       setFetchError("Unable to load more photos.");
     } finally {
@@ -198,7 +242,7 @@ export function ShareGallery({
                 <span>{FILTER_LABELS[key]}</span>
                 {key === "favorites" && (
                   <span className="share-filter-count tabular-nums">
-                    {favoriteList.length}
+                    {favoriteIds.size}
                   </span>
                 )}
               </button>
@@ -207,7 +251,7 @@ export function ShareGallery({
         </div>
 
         <p className="share-toolbar-count tabular-nums">
-          Showing {visiblePhotos.length} of {album.photoCount}
+          Showing {visiblePhotos.length} of {filterTotal}
         </p>
       </div>
 
