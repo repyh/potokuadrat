@@ -509,9 +509,11 @@ export function AlbumMediaWorkspace({
                   key={photo.id}
                   className={cardClasses}
                   draggable={reorderEnabled && !savingOrder && !refreshing}
-                  onDragStart={() => {
+                  onDragStart={(event) => {
                     if (reorderEnabled) {
                       setDraggingId(photo.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", photo.id);
                     }
                   }}
                   onDragOver={(event) => handleDragOver(event, photo.id)}
