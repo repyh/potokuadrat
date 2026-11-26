@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -10,18 +11,12 @@ import type {
   DriveFoldersResponse,
 } from "@/contracts/admin";
 import type { Photo } from "@/contracts/album";
-import type {
-  DownloadQuality,
-  IssuedMagicLink,
-  ShareMode,
-  ShareSummary,
-} from "@/contracts/share";
+import type { ShareMode, ShareSummary } from "@/contracts/share";
 import {
   deleteAlbumAction,
   reindexAlbumAction,
   updateAlbumAction,
 } from "@/app/admin/albums/actions";
-import { createShareAction } from "@/app/admin/shares/actions";
 import {
   Alert,
   Breadcrumbs,
@@ -34,9 +29,7 @@ import {
   Fieldset,
   Input,
   ProgressBar,
-  RadioGroup,
   Select,
-  Switch,
 } from "@/components/ui";
 
 import { AlbumMediaWorkspace } from "./album-media-workspace";
@@ -89,15 +82,6 @@ export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDet
     message: string;
   } | null>(null);
 
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareMode, setShareMode] = useState<ShareMode>("public");
-  const [sharePassword, setSharePassword] = useState("");
-  const [shareRecipients, setShareRecipients] = useState("");
-  const [allowDownload, setAllowDownload] = useState(true);
-  const [allowOriginal, setAllowOriginal] = useState(true);
-  const [creatingShare, setCreatingShare] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
-  const [issuedLinks, setIssuedLinks] = useState<IssuedMagicLink[]>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const handleCopy = async (key: string, text: string) => {
@@ -266,54 +250,6 @@ export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDet
     router.refresh();
   };
 
-  const handleCreateShare = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (creatingShare) {
-      return;
-    }
-
-    const allowedQualities: DownloadQuality[] = allowOriginal
-      ? ["original", "web"]
-      : ["web"];
-
-    const recipients =
-      shareMode === "magic_link"
-        ? shareRecipients
-            .split(/[\n,]+/)
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : undefined;
-
-    setCreatingShare(true);
-    setShareError(null);
-
-    const result = await createShareAction(album.id, {
-      mode: shareMode,
-      allowDownload,
-      allowedQualities,
-      password: shareMode === "password" ? sharePassword : undefined,
-      recipients,
-    });
-
-    setCreatingShare(false);
-
-    if (!result.ok) {
-      setShareError(result.error);
-      return;
-    }
-
-    setIssuedLinks(result.data.links);
-    setShareDialogOpen(false);
-    setSharePassword("");
-    setShareRecipients("");
-    setFeedback({
-      tone: "success",
-      title: "Share link created",
-      message: `Share /s/${result.data.share.slug} is ready.`,
-    });
-    router.refresh();
-  };
-
   return (
     <section className="admin-page" aria-labelledby="album-detail-heading">
       <Breadcrumbs
@@ -339,30 +275,6 @@ export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDet
           onDismiss={() => setFeedback(null)}
         >
           {feedback.message}
-        </Alert>
-      )}
-
-      {issuedLinks.length > 0 && (
-        <Alert
-          tone="success"
-          title="Copy one-time magic links now"
-          onDismiss={() => setIssuedLinks([])}
-        >
-          <div className="admin-dialog-stack">
-            {issuedLinks.map((link) => (
-              <div key={link.recipientId} className="specimen-inline-cluster">
-                <span>{link.email}:</span>
-                <code>{link.url}</code>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void handleCopy(link.recipientId, link.url)}
-                >
-                  {copiedKey === link.recipientId ? "Copied" : "Copy"}
-                </Button>
-              </div>
-            ))}
-          </div>
         </Alert>
       )}
 
@@ -535,16 +447,12 @@ export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDet
         description="Create public, password-protected, or one-time magic-link folios for clients."
       >
         <div className="specimen-inline-cluster">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => {
-              setShareError(null);
-              setShareDialogOpen(true);
-            }}
+          <Link
+            href={`/admin/shares/new?album=${encodeURIComponent(album.id)}`}
+            className="ui-btn ui-btn-primary ui-btn-md"
           >
-            New share link
-          </Button>
+            <span className="ui-btn-label">New share link</span>
+          </Link>
         </div>
 
         {shares.length === 0 ? (
@@ -642,102 +550,6 @@ export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDet
           </Button>
         </div>
       </Fieldset>
-
-      <Dialog
-        open={shareDialogOpen}
-        onClose={() => setShareDialogOpen(false)}
-        title="New share link"
-        description="Choose how clients access and download this folio."
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => setShareDialogOpen(false)}
-              disabled={creatingShare}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="create-share-form"
-              variant="primary"
-              loading={creatingShare}
-            >
-              Create share
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="create-share-form"
-          onSubmit={handleCreateShare}
-          className="admin-dialog-stack"
-          noValidate
-        >
-          {shareError && (
-            <Alert tone="danger" title="Could not create share">
-              {shareError}
-            </Alert>
-          )}
-
-          <RadioGroup
-            name="share-mode"
-            legend="Access mode"
-            value={shareMode}
-            onChange={(val) => setShareMode(val as ShareMode)}
-            options={[
-              { value: "public", label: "Public link" },
-              { value: "password", label: "Password protected" },
-              { value: "magic_link", label: "One-time magic link" },
-            ]}
-          />
-
-          {shareMode === "password" && (
-            <Field htmlFor="create-share-password" label="Share password">
-              <Input
-                id="create-share-password"
-                type="password"
-                value={sharePassword}
-                onChange={(e) => setSharePassword(e.target.value)}
-                required
-                placeholder="At least 4 characters"
-              />
-            </Field>
-          )}
-
-          {shareMode === "magic_link" && (
-            <Field
-              htmlFor="create-share-recipients"
-              label="Recipient emails"
-              hint="Comma or newline separated."
-            >
-              <Input
-                id="create-share-recipients"
-                value={shareRecipients}
-                onChange={(e) => setShareRecipients(e.target.value)}
-                placeholder="guest@example.com"
-              />
-            </Field>
-          )}
-
-          <Switch
-            id="share-allow-download"
-            checked={allowDownload}
-            onChange={setAllowDownload}
-            label="Allow photo and ZIP downloads"
-          />
-
-          {allowDownload && (
-            <Switch
-              id="share-allow-original"
-              checked={allowOriginal}
-              onChange={setAllowOriginal}
-              label="Include original-resolution downloads"
-              description="When off, guests can download Web 2048px copies only."
-            />
-          )}
-        </form>
-      </Dialog>
 
       <ShareRevokeDialog
         share={revokeTarget}
