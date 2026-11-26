@@ -51,6 +51,7 @@ function failed(error: unknown): ActionResult<never> {
 
 function refreshAlbumPages(): void {
   revalidatePath("/admin/albums");
+  revalidatePath("/admin/shares");
   revalidatePath("/admin");
 }
 
