@@ -2076,6 +2076,180 @@ select {
    Guest share folio & lightbox
    --------------------------------------------------------------------------- */
 
+.share-folio-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(24px, 4vw, 44px);
+  padding: 0 0 72px;
+}
+
+.share-spine {
+  position: sticky;
+  top: 79px;
+  height: calc(100svh - 79px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 20px;
+  background: var(--ink);
+  color: var(--paper);
+  overflow-y: auto;
+}
+
+.share-spine-top {
+  display: grid;
+  gap: 20px;
+}
+
+.share-spine-identity {
+  display: grid;
+  gap: 8px;
+}
+
+.share-spine-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--paper) 72%, transparent);
+}
+
+.share-spine-title {
+  margin: 0;
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 3vw, 36px);
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  overflow-wrap: anywhere;
+}
+
+.share-spine-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--paper) 82%, transparent);
+}
+
+.share-spine-expiry {
+  margin: 0;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--paper) 68%, transparent);
+}
+
+.share-spine-note {
+  margin: 4px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 16%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--paper) 86%, transparent);
+}
+
+.share-spine-nav {
+  display: grid;
+  gap: 4px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 16%, transparent);
+}
+
+.share-dest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--paper) 76%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.share-dest:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--paper) 8%, transparent);
+  color: var(--paper);
+}
+
+.share-dest:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.share-dest.is-active {
+  background: color-mix(in srgb, var(--paper) 12%, transparent);
+  color: var(--paper);
+}
+
+.share-dest-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-dest-marker {
+  width: 6px;
+  height: 14px;
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.share-dest.is-active .share-dest-marker {
+  background: var(--accent);
+}
+
+.share-dest-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--paper) 72%, transparent);
+}
+
+.share-spine-foot {
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 16%, transparent);
+}
+
+.share-spine-foot .ui-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.share-folio-main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+  padding-top: clamp(24px, 4vw, 44px);
+}
+
+.share-mobile-bar {
+  display: none;
+}
+
+.share-folio-footer {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px clamp(24px, 5vw, 64px) 28px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
 .share-folio {
   display: grid;
   gap: 24px;
@@ -2385,7 +2559,63 @@ select {
   cursor: not-allowed;
 }
 
+@media (max-width: 920px) {
+  .share-folio-shell {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding-top: 20px;
+  }
+
+  .share-spine {
+    position: static;
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .share-folio-main {
+    padding-top: 0;
+  }
+
+  .share-spine-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .share-dest {
+    width: auto;
+  }
+}
+
 @media (max-width: 640px) {
+  .share-folio-shell.has-mobile-bar {
+    padding-bottom: 96px;
+  }
+
+  .share-spine-foot {
+    display: none;
+  }
+
+  .share-mobile-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--ink);
+    color: var(--paper);
+    border-top: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+  }
+
+  .share-mobile-bar-meta {
+    font-size: 13px;
+  }
+
   .share-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;

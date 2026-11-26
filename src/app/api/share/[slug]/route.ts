@@ -1,4 +1,9 @@
-import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
+import type {
+  GalleryAlbum,
+  GalleryPreview,
+  GalleryState,
+  SharePolicy,
+} from "@/contracts/share";
 
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareAccess } from "@/server/shares/access";
@@ -21,12 +26,19 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
 
   let album: GalleryAlbum | null = null;
   let policy: SharePolicy | null = null;
+  let preview: GalleryPreview | null = null;
 
   if (access === "ok") {
     album = {
       slug: share.albumSlug,
       title: share.albumTitle,
       photoCount: share.photoCount,
+      totalBytes: share.totalBytes ?? 0,
+      orientationCounts: {
+        landscape: share.landscapeCount ?? 0,
+        portrait: share.portraitCount ?? 0,
+      },
+      footerEnabled: share.organizationFooterEnabled ?? true,
       branding: share.albumBranding,
       photographerName: share.photographerName,
     };
@@ -38,8 +50,15 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
       stripMetadata: resolveStripMetadata(share, share.organizationStripMetadata),
       expiresAt: share.expiresAt?.toISOString() ?? null,
     };
+  } else {
+    preview = {
+      title: share.albumTitle,
+      branding: share.albumBranding,
+      photographerName: share.photographerName,
+      footerEnabled: share.organizationFooterEnabled ?? true,
+    };
   }
 
-  const body: GalleryState = { access, album, policy };
+  const body: GalleryState = { access, album, policy, preview };
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }
