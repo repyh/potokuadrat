@@ -3,7 +3,7 @@
  * the Postgres enums; `src/server/db/schema/enums.test.ts` keeps them in sync.
  */
 
-import type { BrandingOverride } from "./branding";
+import type { BrandingOverride, ResolvedBranding } from "./branding";
 
 export const SHARE_MODES = ["public", "password", "magic_link"] as const;
 export type ShareMode = (typeof SHARE_MODES)[number];
@@ -41,6 +41,7 @@ export interface GalleryAlbum {
   title: string;
   photoCount: number;
   branding: BrandingOverride | null;
+  resolvedBranding?: ResolvedBranding;
   photographerName: string | null;
 }
 
@@ -48,6 +49,7 @@ export interface GalleryState {
   access: GalleryAccess;
   album: GalleryAlbum | null;
   policy: SharePolicy | null;
+  resolvedBranding?: ResolvedBranding | null;
 }
 
 /**

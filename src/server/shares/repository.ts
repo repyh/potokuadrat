@@ -26,6 +26,7 @@ export interface ShareRecord {
   allowDownload: boolean;
   allowedQualities: DownloadQuality[];
   stripMetadata: boolean | null;
+  shareBranding?: BrandingOverride | null;
   albumId: string;
   albumSlug: string;
   albumTitle: string;
@@ -33,6 +34,11 @@ export interface ShareRecord {
   photographerName: string | null;
   photoCount: number;
   organizationStripMetadata: boolean;
+  organizationName?: string | null;
+  organizationTitle?: string | null;
+  organizationLogo?: string | null;
+  organizationAccent?: string | null;
+  organizationFooterEnabled?: boolean;
 }
 
 export interface SharePhotoRecord {
@@ -194,6 +200,7 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
           allowDownload: shares.allowDownload,
           allowedQualities: shares.allowedQualities,
           stripMetadata: shares.stripMetadata,
+          shareBranding: shares.branding,
           albumId: shares.albumId,
           albumSlug: albums.slug,
           albumTitle: albums.title,
@@ -205,6 +212,16 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
             ),
           organizationStripMetadata:
             sql<boolean | null>`(select strip_metadata from organizations limit 1)`,
+          organizationName:
+            sql<string | null>`(select name from organizations limit 1)`,
+          organizationTitle:
+            sql<string | null>`(select title from organizations limit 1)`,
+          organizationLogo:
+            sql<string | null>`(select logo from organizations limit 1)`,
+          organizationAccent:
+            sql<string | null>`(select accent from organizations limit 1)`,
+          organizationFooterEnabled:
+            sql<boolean | null>`(select footer_enabled from organizations limit 1)`,
         })
         .from(shares)
         .innerJoin(albums, eq(shares.albumId, albums.id))
@@ -220,6 +237,7 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
         ...row,
         // Without an organization row the safe default still applies.
         organizationStripMetadata: row.organizationStripMetadata ?? true,
+        organizationFooterEnabled: row.organizationFooterEnabled ?? true,
       };
     },
 

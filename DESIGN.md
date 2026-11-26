@@ -76,8 +76,16 @@ reserved for the primary action and the active filter. Quiet text and fine rules
 counts, dimensions, and file sizes without competing with the images.
 
 Branding comes from the organization row in the database, with optional per-share
-overrides for title, logo, and accent. The values above are the shipped defaults and
-the fallback before an organization is configured.
+overrides resolved on the server (`share override -> album -> organization`): title, logo
+(with initial letter fallback), welcome message, and accent hex color (paired with
+curated `ACCENT_PRESETS` including Lime Leaf `#d9ef63`, Terracotta `#b4532a`, Botanical Ink
+`#183c34`, Warm Ochre `#d4a24c`, and Slate Blue `#3d5a73`). Footer attribution visibility is
+configured per organization (`organizations.footer_enabled`).
+
+In `src/app/globals.css`, `:root` exposes `--ground` (`#e9eee2`), `--paper` (`#f8f8f0`),
+`--surface` (`#f8f8f0`), `--ink` (`#183c34`), `--accent` (`#d9ef63`), `--quiet` (`#50675d`),
+`--line` (`#c6d0c3`), and `--rule` (`#c6d0c3`), while `.folio-frame` binds `--brand-accent`
+from the resolved branding.
 
 ## Typography
 
