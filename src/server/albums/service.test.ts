@@ -54,6 +54,7 @@ function repository(overrides: Partial<AlbumRepository> = {}): AlbumRepository {
     deleteAlbum: vi.fn(async () => {}),
     setCoverPhoto: vi.fn(async () => {}),
     findAlbumPhoto: vi.fn(async () => ({ id: "photo-1" })),
+    findAlbumPhotoMedia: vi.fn(async () => null),
     upsertPhotos: vi.fn(async () => {}),
     markMissingPhotos: vi.fn(async () => 0),
     countProgress: vi.fn(async () => ({

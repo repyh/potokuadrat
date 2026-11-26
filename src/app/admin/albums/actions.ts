@@ -103,6 +103,30 @@ export async function reindexAlbumAction(
   }
 }
 
+export async function listAlbumPhotosAction(
+  albumId: string,
+): Promise<ActionResult<AlbumPhotosResponse>> {
+  const userId = await adminUserId();
+  if (!userId) {
+    return UNAUTHORIZED;
+  }
+
+  const parsed = albumIdSchema.safeParse(albumId);
+  if (!parsed.success) {
+    return notFound("Album not found.");
+  }
+
+  try {
+    const result = await getAlbumService().photos(userId, parsed.data);
+    if (!result) {
+      return notFound("Album not found.");
+    }
+    return { ok: true, data: result };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
 export async function reorderAlbumPhotosAction(
   albumId: string,
   input: ReorderAlbumPhotosInput,

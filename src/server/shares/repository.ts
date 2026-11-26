@@ -3,9 +3,10 @@ import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { PhotoFilter, ThumbStatus } from "@/contracts/album";
+import type { PhotoFilter, PhotoSort, ThumbStatus } from "@/contracts/album";
 import type { BrandingOverride } from "@/contracts/branding";
 import type { DownloadQuality, ShareMode } from "@/contracts/share";
+import { comparePhotos } from "@/server/photos/sort";
 import * as schema from "@/server/db/schema";
 import {
   albums,
@@ -33,6 +34,9 @@ export interface ShareRecord {
   albumBranding: BrandingOverride | null;
   photographerName: string | null;
   photoCount: number;
+  totalBytes?: number;
+  landscapeCount?: number;
+  portraitCount?: number;
   organizationStripMetadata: boolean;
   organizationName?: string | null;
   organizationTitle?: string | null;
@@ -64,12 +68,14 @@ export interface SharePhotoRow {
 }
 
 export interface SharePhotoCursor {
+  sort?: PhotoSort;
   sortIndex: number;
   id: string;
 }
 
 export interface SharePhotoListOptions {
   filter: PhotoFilter;
+  sort?: PhotoSort;
   /** Required when the filter is `favorites`; ignored otherwise. */
   clientSessionId: string | null;
   cursor: SharePhotoCursor | null;
@@ -207,7 +213,19 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
           albumBranding: albums.branding,
           photographerName: users.name,
           photoCount:
-            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null)`.mapWith(
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          totalBytes:
+            sql<number>`(select coalesce(sum(p.bytes), 0) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          landscapeCount:
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and p.width is not null and p.height is not null and p.width >= p.height and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          portraitCount:
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and p.width is not null and p.height is not null and p.height > p.width and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
               Number,
             ),
           organizationStripMetadata:
@@ -260,7 +278,39 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
     },
 
     async listSharePhotos(share, options) {
+      const sort = options.sort ?? "manual";
       const base = filterConditions(share, options);
+
+      if (sort !== "manual") {
+        const allRows = await db
+          .select({
+            id: photos.id,
+            name: photos.name,
+            width: photos.width,
+            height: photos.height,
+            bytes: photos.bytes,
+            thumbStatus: photos.thumbStatus,
+            takenAt: photos.takenAt,
+            sortIndex: photos.sortIndex,
+          })
+          .from(photos)
+          .where(and(...base))
+          .orderBy(asc(photos.sortIndex), asc(photos.id));
+
+        const sorted = [...allRows].sort((a, b) => comparePhotos(a, b, sort));
+        const cursorIndex = options.cursor
+          ? sorted.findIndex((item) => item.id === options.cursor?.id)
+          : -1;
+        const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+        const slice = sorted.slice(start, start + options.limit + 1);
+
+        return {
+          rows: slice.slice(0, options.limit),
+          total: sorted.length,
+          hasMore: slice.length > options.limit,
+        };
+      }
+
       const conditions = [...base];
 
       if (options.cursor) {

@@ -36,10 +36,26 @@ export interface SharePolicy {
   expiresAt: string | null;
 }
 
+export interface GalleryOrientationCounts {
+  landscape: number;
+  portrait: number;
+}
+
+/** Minimal metadata exposed while a share is locked or unavailable. */
+export interface GalleryPreview {
+  title: string;
+  branding: BrandingOverride | null;
+  photographerName: string | null;
+  footerEnabled: boolean;
+}
+
 export interface GalleryAlbum {
   slug: string;
   title: string;
   photoCount: number;
+  totalBytes: number;
+  orientationCounts: GalleryOrientationCounts;
+  footerEnabled: boolean;
   branding: BrandingOverride | null;
   resolvedBranding?: ResolvedBranding;
   photographerName: string | null;
@@ -50,6 +66,7 @@ export interface GalleryState {
   album: GalleryAlbum | null;
   policy: SharePolicy | null;
   resolvedBranding?: ResolvedBranding | null;
+  preview?: GalleryPreview | null;
 }
 
 /**

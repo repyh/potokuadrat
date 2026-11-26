@@ -5,7 +5,12 @@ import Link from "next/link";
 import { connection } from "next/server";
 
 import type { PhotoPage } from "@/contracts/album";
-import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
+import type {
+  GalleryAlbum,
+  GalleryPreview,
+  GalleryState,
+  SharePolicy,
+} from "@/contracts/share";
 import { BrandMark } from "@/components/brand-mark";
 import { ShareAccessGate } from "@/features/share/share-access-gate";
 import { ShareGallery } from "@/features/share/share-gallery";
@@ -67,7 +72,7 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
 
   if (!share) {
     return {
-      state: { access: "unavailable", album: null, policy: null, resolvedBranding: null },
+      state: { access: "unavailable", album: null, policy: null, resolvedBranding: null, preview: null },
       initialPage: emptyPage,
       initialFavoriteIds: [],
       photographerName: null,
@@ -92,8 +97,15 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   const access = resolveShareAccess(share, new Date(), authorization.authorized);
 
   if (access !== "ok") {
+    const preview: GalleryPreview = {
+      title: share.albumTitle,
+      branding: share.albumBranding,
+      photographerName: share.photographerName,
+      footerEnabled: share.organizationFooterEnabled ?? true,
+    };
+
     return {
-      state: { access, album: null, policy: null, resolvedBranding },
+      state: { access, album: null, policy: null, resolvedBranding, preview },
       initialPage: emptyPage,
       initialFavoriteIds: [],
       photographerName: share.photographerName,
@@ -107,6 +119,12 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
     slug: share.albumSlug,
     title: share.albumTitle,
     photoCount: share.photoCount,
+    totalBytes: share.totalBytes ?? 0,
+    orientationCounts: {
+      landscape: share.landscapeCount ?? 0,
+      portrait: share.portraitCount ?? 0,
+    },
+    footerEnabled: share.organizationFooterEnabled ?? true,
     branding: {
       title: resolvedBranding.title,
       logo: resolvedBranding.logo ?? undefined,
@@ -132,7 +150,7 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   ]);
 
   return {
-    state: { access, album, policy, resolvedBranding },
+    state: { access, album, policy, resolvedBranding, preview: null },
     initialPage: galleryResult.ok ? galleryResult.page : emptyPage,
     initialFavoriteIds: favoritesResult && favoritesResult.ok ? favoritesResult.favorites.photoIds : [],
     photographerName: share.photographerName,
@@ -179,6 +197,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             slug={slug}
             access={state.access === "ok" ? "unavailable" : state.access}
             initialToken={initialToken}
+            preview={state.preview ?? null}
           />
         ) : (
           <ShareGallery
@@ -187,6 +206,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             policy={state.policy}
             initialPage={initialPage}
             initialFavoriteIds={initialFavoriteIds}
+            brandTitle={brandTitle}
           />
         )}
       </div>

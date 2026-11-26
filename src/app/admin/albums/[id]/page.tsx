@@ -16,14 +16,22 @@ type PageProps = {
 
 export default async function AdminAlbumDetailPage({ params }: PageProps) {
   const [{ id }, session] = await Promise.all([params, requireAdmin()]);
-  const [detail, shares] = await Promise.all([
+  const [detail, shares, photosResult] = await Promise.all([
     getAlbumService().detail(id),
     getShareAdminService().list(session.user.id, id),
+    getAlbumService().photos(session.user.id, id),
   ]);
 
-  if (!detail) {
+  if (!detail || !photosResult) {
     notFound();
   }
 
-  return <AlbumDetailView detail={detail} shares={shares} now={new Date().getTime()} />;
+  return (
+    <AlbumDetailView
+      detail={detail}
+      shares={shares}
+      initialPhotos={photosResult.photos}
+      now={new Date().getTime()}
+    />
+  );
 }
