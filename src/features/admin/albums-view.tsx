@@ -176,7 +176,11 @@ export function AlbumsView({ albums, now }: AlbumsViewProps) {
                     href={`/admin/albums/${encodeURIComponent(album.id)}`}
                     className="admin-table-title"
                   >
-                    <AlbumCoverMark title={album.title} />
+                    <AlbumCoverMark
+                      albumId={album.id}
+                      coverPhotoId={album.coverPhotoId}
+                      title={album.title}
+                    />
                     <span className="admin-table-primary">
                       <strong>{album.title}</strong>
                       <span className="admin-table-sub">/{album.slug}</span>
