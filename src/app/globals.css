@@ -2169,6 +2169,8 @@ select {
   position: relative;
   border: 1px solid var(--line);
   background: var(--ground);
+  content-visibility: auto;
+  contain-intrinsic-size: 260px 260px;
 }
 
 .share-tile-skeleton {

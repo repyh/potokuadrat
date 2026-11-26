@@ -1,16 +1,126 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import type { Photo, PhotoFilter, PhotoPage } from "@/contracts/album";
 import type { DownloadQuality, GalleryAlbum, SharePolicy } from "@/contracts/share";
 import { Alert, Button, EmptyState } from "@/components/ui";
 
 import { countFavorites, loadAllRemainingPhotos, resolveGalleryTotal } from "./gallery-pages";
-import { ShareDownloadDialog } from "./share-download-dialog";
 import { ShareGridSkeleton } from "./share-grid-skeleton";
-import { ShareLightbox } from "./share-lightbox";
 import { useShareFavorites } from "./use-share-favorites";
+
+const ShareLightbox = dynamic(
+  () => import("./share-lightbox").then((mod) => mod.ShareLightbox),
+  { ssr: false },
+);
+
+const ShareDownloadDialog = dynamic(
+  () => import("./share-download-dialog").then((mod) => mod.ShareDownloadDialog),
+  { ssr: false },
+);
+
+export function buildShareThumbSrcSet(
+  slug: string,
+  photoId: string,
+  widths: readonly number[] = [400, 800],
+): string {
+  const encodedSlug = encodeURIComponent(slug);
+  const encodedPhotoId = encodeURIComponent(photoId);
+  return widths
+    .map((width) => `/s/${encodedSlug}/thumb/${encodedPhotoId}?w=${width} ${width}w`)
+    .join(", ");
+}
+
+interface SharePhotoTileProps {
+  slug: string;
+  photo: Photo;
+  index: number;
+  isFavorite: boolean;
+  showDownloadCta: boolean;
+  preferredQuality: DownloadQuality;
+  onOpen: (index: number) => void;
+  onToggleFavorite: (photoId: string) => void;
+}
+
+const SharePhotoTile = memo(function SharePhotoTile({
+  slug,
+  photo,
+  index,
+  isFavorite,
+  showDownloadCta,
+  preferredQuality,
+  onOpen,
+  onToggleFavorite,
+}: SharePhotoTileProps) {
+  const aspectRatio =
+    photo.width && photo.height ? `${photo.width} / ${photo.height}` : "4 / 3";
+
+  return (
+    <article className="share-tile">
+      <button
+        type="button"
+        onClick={() => onOpen(index)}
+        className="share-tile-media"
+        style={{ aspectRatio }}
+        aria-label={`Open ${photo.name}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/s/${encodeURIComponent(slug)}/thumb/${encodeURIComponent(photo.id)}?w=400`}
+          srcSet={buildShareThumbSrcSet(slug, photo.id)}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
+          width={photo.width ?? undefined}
+          height={photo.height ?? undefined}
+          alt={photo.name}
+          loading={index < 4 ? "eager" : "lazy"}
+          fetchPriority={index === 0 ? "high" : "auto"}
+          decoding="async"
+          className="share-tile-img"
+        />
+      </button>
+
+      <div className="share-tile-overlay">
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(photo.id)}
+          aria-pressed={isFavorite}
+          aria-label={isFavorite ? `Remove ${photo.name} from favorites` : `Favorite ${photo.name}`}
+          className={`share-fav-btn ${isFavorite ? "is-active" : ""}`.trim()}
+        >
+          <svg viewBox="0 0 20 20" fill={isFavorite ? "currentColor" : "none"} aria-hidden="true">
+            <path
+              d="M10 17.25s-6.5-4.1-6.5-9.05A3.7 3.7 0 0 1 7.2 4.5c1.25 0 2.25.63 2.8 1.56A3.4 3.4 0 0 1 12.8 4.5a3.7 3.7 0 0 1 3.7 3.7c0 4.95-6.5 9.05-6.5 9.05Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
+        {showDownloadCta && (
+          <a
+            href={`/s/${encodeURIComponent(slug)}/download/${encodeURIComponent(photo.id)}?quality=${preferredQuality}`}
+            download
+            aria-label={`Download ${photo.name}`}
+            className="share-dl-btn"
+          >
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path
+                d="M10 3.5v9.25m0 0-3.5-3.5M10 12.75l3.5-3.5M4 15.75h12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
+        )}
+      </div>
+    </article>
+  );
+});
 
 export interface ShareGalleryProps {
   slug: string;
@@ -252,6 +362,13 @@ export function ShareGallery({
     [favoriteIds, filter, policy.mode, toggleFavorite],
   );
 
+  const handleFavoriteClick = useCallback(
+    (photoId: string) => {
+      void handleToggleFavorite(photoId);
+    },
+    [handleToggleFavorite],
+  );
+
   const expiryLabel = formatExpiry(policy.expiresAt);
   const showDownloadCta = policy.allowDownload && policy.allowedQualities.length > 0;
   const activeError = fetchError ?? favoriteError;
@@ -345,69 +462,19 @@ export function ShareGallery({
       ) : (
         <>
           <div className="share-grid">
-            {visiblePhotos.map((photo, index) => {
-              const isFav = favoriteIds.has(photo.id);
-              const aspectRatio =
-                photo.width && photo.height ? `${photo.width} / ${photo.height}` : "4 / 3";
-
-              return (
-                <article key={photo.id} className="share-tile">
-                  <button
-                    type="button"
-                    onClick={() => setLightboxIndex(index)}
-                    className="share-tile-media"
-                    style={{ aspectRatio }}
-                    aria-label={`Open ${photo.name}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/s/${encodeURIComponent(slug)}/thumb/${encodeURIComponent(photo.id)}?w=400`}
-                      alt={photo.name}
-                      loading="lazy"
-                      className="share-tile-img"
-                    />
-                  </button>
-
-                  <div className="share-tile-overlay">
-                    <button
-                      type="button"
-                      onClick={() => void handleToggleFavorite(photo.id)}
-                      aria-pressed={isFav}
-                      aria-label={isFav ? `Remove ${photo.name} from favorites` : `Favorite ${photo.name}`}
-                      className={`share-fav-btn ${isFav ? "is-active" : ""}`.trim()}
-                    >
-                      <svg viewBox="0 0 20 20" fill={isFav ? "currentColor" : "none"} aria-hidden="true">
-                        <path
-                          d="M10 17.25s-6.5-4.1-6.5-9.05A3.7 3.7 0 0 1 7.2 4.5c1.25 0 2.25.63 2.8 1.56A3.4 3.4 0 0 1 12.8 4.5a3.7 3.7 0 0 1 3.7 3.7c0 4.95-6.5 9.05-6.5 9.05Z"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-
-                    {showDownloadCta && (
-                      <a
-                        href={`/s/${encodeURIComponent(slug)}/download/${encodeURIComponent(photo.id)}?quality=${preferredQuality}`}
-                        download
-                        aria-label={`Download ${photo.name}`}
-                        className="share-dl-btn"
-                      >
-                        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                          <path
-                            d="M10 3.5v9.25m0 0-3.5-3.5M10 12.75l3.5-3.5M4 15.75h12"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </a>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+            {visiblePhotos.map((photo, index) => (
+              <SharePhotoTile
+                key={photo.id}
+                slug={slug}
+                photo={photo}
+                index={index}
+                isFavorite={favoriteIds.has(photo.id)}
+                showDownloadCta={showDownloadCta}
+                preferredQuality={preferredQuality}
+                onOpen={setLightboxIndex}
+                onToggleFavorite={handleFavoriteClick}
+              />
+            ))}
           </div>
 
           {nextCursor && (
@@ -424,19 +491,21 @@ export function ShareGallery({
         </>
       )}
 
-      <ShareLightbox
-        slug={slug}
-        photos={visiblePhotos}
-        activeIndex={lightboxIndex}
-        favoriteIds={favoriteIds}
-        allowDownload={showDownloadCta}
-        preferredQuality={preferredQuality}
-        onClose={() => setLightboxIndex(null)}
-        onNavigate={(nextIndex) => setLightboxIndex(nextIndex)}
-        onToggleFavorite={(photoId) => void handleToggleFavorite(photoId)}
-      />
+      {lightboxIndex !== null && (
+        <ShareLightbox
+          slug={slug}
+          photos={visiblePhotos}
+          activeIndex={lightboxIndex}
+          favoriteIds={favoriteIds}
+          allowDownload={showDownloadCta}
+          preferredQuality={preferredQuality}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={(nextIndex) => setLightboxIndex(nextIndex)}
+          onToggleFavorite={handleFavoriteClick}
+        />
+      )}
 
-      {showDownloadCta && (
+      {showDownloadCta && downloadOpen && (
         <ShareDownloadDialog
           open={downloadOpen}
           onClose={() => setDownloadOpen(false)}
