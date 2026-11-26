@@ -3,9 +3,10 @@ import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { PhotoFilter, ThumbStatus } from "@/contracts/album";
+import type { PhotoFilter, PhotoSort, ThumbStatus } from "@/contracts/album";
 import type { BrandingOverride } from "@/contracts/branding";
 import type { DownloadQuality, ShareMode } from "@/contracts/share";
+import { comparePhotos } from "@/server/photos/sort";
 import * as schema from "@/server/db/schema";
 import {
   albums,
@@ -62,12 +63,14 @@ export interface SharePhotoRow {
 }
 
 export interface SharePhotoCursor {
+  sort?: PhotoSort;
   sortIndex: number;
   id: string;
 }
 
 export interface SharePhotoListOptions {
   filter: PhotoFilter;
+  sort?: PhotoSort;
   /** Required when the filter is `favorites`; ignored otherwise. */
   clientSessionId: string | null;
   cursor: SharePhotoCursor | null;
@@ -261,7 +264,39 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
     },
 
     async listSharePhotos(share, options) {
+      const sort = options.sort ?? "manual";
       const base = filterConditions(share, options);
+
+      if (sort !== "manual") {
+        const allRows = await db
+          .select({
+            id: photos.id,
+            name: photos.name,
+            width: photos.width,
+            height: photos.height,
+            bytes: photos.bytes,
+            thumbStatus: photos.thumbStatus,
+            takenAt: photos.takenAt,
+            sortIndex: photos.sortIndex,
+          })
+          .from(photos)
+          .where(and(...base))
+          .orderBy(asc(photos.sortIndex), asc(photos.id));
+
+        const sorted = [...allRows].sort((a, b) => comparePhotos(a, b, sort));
+        const cursorIndex = options.cursor
+          ? sorted.findIndex((item) => item.id === options.cursor?.id)
+          : -1;
+        const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+        const slice = sorted.slice(start, start + options.limit + 1);
+
+        return {
+          rows: slice.slice(0, options.limit),
+          total: sorted.length,
+          hasMore: slice.length > options.limit,
+        };
+      }
+
       const conditions = [...base];
 
       if (options.cursor) {
