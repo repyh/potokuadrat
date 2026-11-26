@@ -186,11 +186,39 @@ export function ShareDetailView({
     }
 
     const qualities: DownloadQuality[] = [];
-    if (allowOriginal) {
-      qualities.push("original");
+    if (allowDownload) {
+      if (allowOriginal) {
+        qualities.push("original");
+      }
+      if (allowWeb) {
+        qualities.push("web");
+      }
+      if (qualities.length === 0) {
+        setFeedback({
+          tone: "danger",
+          title: "No download quality selected",
+          message: "Keep at least one download quality enabled, or turn downloads off.",
+        });
+        return;
+      }
     }
-    if (allowWeb) {
-      qualities.push("web");
+
+    if (expiryChoice === "date" && !expiryDate.trim()) {
+      setFeedback({
+        tone: "danger",
+        title: "Choose an expiration date",
+        message: "Pick a date, or switch the link to never expire.",
+      });
+      return;
+    }
+
+    if (mode === "password" && share.mode !== "password" && password.trim().length < 8) {
+      setFeedback({
+        tone: "danger",
+        title: "Password required",
+        message: "Use at least 8 characters when switching to password mode.",
+      });
+      return;
     }
 
     const expiresAt =
@@ -205,7 +233,7 @@ export function ShareDetailView({
       expiresAt,
       allowDownload,
       ...(allowDownload ? { allowedQualities: qualities } : {}),
-      ...(password ? { password } : {}),
+      ...(mode === "password" && password ? { password } : {}),
     });
     setSavingAccess(false);
 
@@ -365,6 +393,19 @@ export function ShareDetailView({
     const trimmedAccent = brandingAccent.trim();
     const trimmedWelcome = brandingWelcome.trim();
 
+    if (trimmedAccent && !/^#[0-9a-fA-F]{6}$/.test(trimmedAccent)) {
+      setFeedback({
+        tone: "danger",
+        title: "Check the accent color",
+        message: "Use a six-digit hex color like #b4532a.",
+      });
+      return;
+    }
+
+    // The detail view does not edit the logo yet; keep an existing override.
+    if (share.branding?.logo) {
+      branding.logo = share.branding.logo;
+    }
     if (trimmedTitle) {
       branding.title = trimmedTitle;
     }
@@ -469,7 +510,7 @@ export function ShareDetailView({
         >
           <div className="admin-dialog-stack">
             {issuedLinks.map((link) => (
-              <div key={link.recipientId} className="specimen-inline-cluster">
+              <div key={`${link.recipientId}-${link.expiresAt}`} className="specimen-inline-cluster">
                 <strong>{link.email}</strong>
                 <code>{link.url}</code>
                 <Button
@@ -586,6 +627,7 @@ export function ShareDetailView({
               <Input
                 id="detail-share-expiry-date"
                 type="date"
+                min={todayDate}
                 value={expiryDate}
                 disabled={savingAccess}
                 onChange={(event) => setExpiryDate(event.target.value)}
@@ -831,7 +873,7 @@ export function ShareDetailView({
 
       <Fieldset
         legend="4 · Branding & metadata"
-        description={`Override organization defaults (${orgDefaults.title || orgDefaults.name}) or EXIF/GPS policy for this link.`}
+        description={`Override organization defaults (${orgDefaults.title || orgDefaults.name}) or the thumbnail metadata policy for this link.`}
       >
         <form onSubmit={handleSaveBranding} className="admin-dialog-stack" noValidate>
           <div className="specimen-form-grid">
@@ -886,7 +928,7 @@ export function ShareDetailView({
 
           <RadioGroup
             name="detail-metadata-policy"
-            legend="EXIF & GPS handling"
+            legend="Thumbnail & web copy metadata"
             value={metadataPolicy}
             disabled={savingBranding}
             onChange={(value) => setMetadataPolicy(value as MetadataChoice)}
@@ -896,18 +938,29 @@ export function ShareDetailView({
                 label: "Inherit organization policy",
                 description: `Currently ${
                   orgDefaults.stripMetadata
-                    ? "strips EXIF & GPS metadata"
-                    : "keeps EXIF & GPS metadata"
+                    ? "strips EXIF & GPS from thumbnails and web copies"
+                    : "keeps EXIF & GPS in thumbnails and web copies"
                 }.`,
               },
-              { value: "strip", label: "Strip EXIF & GPS metadata" },
-              { value: "keep", label: "Keep original EXIF & GPS metadata" },
+              {
+                value: "strip",
+                label: "Strip EXIF & GPS",
+                description:
+                  "Removes EXIF, XMP, IPTC, and GPS from thumbnails and Web 2048 copies.",
+              },
+              {
+                value: "keep",
+                label: "Keep EXIF & GPS",
+                description: "Sends thumbnail and web-copy metadata as-is.",
+              },
             ]}
           />
 
           {showMetadataWarning && (
-            <Alert tone="warning" title="Location and camera EXIF metadata will be exposed">
-              Downloaded photos on this share will retain original GPS coordinates and camera EXIF tags.
+            <Alert tone="warning" title="Location and camera metadata will be exposed">
+              Thumbnails and Web 2048 copies on this share will retain original GPS
+              coordinates and camera EXIF. Original downloads are never rewritten, so they
+              always keep their metadata.
             </Alert>
           )}
 
