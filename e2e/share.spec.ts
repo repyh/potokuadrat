@@ -65,16 +65,16 @@ async function expectPhotosRendered(page: Page): Promise<void> {
  * - The grid tile is `aria-label="Open <photo name>"`, so `Open folio` on the
  *   magic-link gate also matches /^Open /. Gate buttons are addressed by their
  *   exact label, and tiles are matched with /^Open .*\.jpe?g$/i to exclude them.
- * - The password input's <section> is labelled by the same "Enter share password"
- *   text as the heading, so `getByLabel("Password")` resolves to two elements.
- *   The input is addressed by its placeholder instead.
+ * - The gate heading now names the album ("Open Seed Gallery", "Unlock Seed
+ *   Gallery", "Seed Gallery has expired"), so the headings below follow the
+ *   seeded title instead of the old generic gate copy.
  * - The lightbox <dialog> is labelled with the photo name; `aria-label="Photo
  *   preview"` exists only on the collapsed placeholder, which is never visible.
  */
 const GATE_HEADING = {
-  password: "Enter share password",
-  expired: "This share link has expired",
-  magic: "Unlock with your invitation",
+  password: "Open Seed Gallery",
+  expired: "Seed Gallery has expired",
+  magic: "Unlock Seed Gallery",
   unavailable: "This folio is not available",
 } as const;
 

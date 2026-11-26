@@ -4,6 +4,7 @@ import { PHOTO_FILTERS } from "@/contracts/album";
 import {
   FILTER_LABELS,
   formatExpiry,
+  formatShareBytes,
   resolvePreferredQuality,
 } from "./share-gallery";
 
@@ -54,5 +55,14 @@ describe("resolvePreferredQuality", () => {
 
   it("returns 'web' as the fallback when the list is empty", () => {
     expect(resolvePreferredQuality([])).toBe("web");
+  });
+});
+
+describe("formatShareBytes", () => {
+  it("formats zero and byte magnitudes cleanly", () => {
+    expect(formatShareBytes(0)).toBe("0 B");
+    expect(formatShareBytes(1024)).toBe("1.0 KB");
+    expect(formatShareBytes(24 * 1024 * 1024)).toBe("24.0 MB");
+    expect(formatShareBytes(1.5 * 1024 * 1024 * 1024)).toBe("1.50 GB");
   });
 });

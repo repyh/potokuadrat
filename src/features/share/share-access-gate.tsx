@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import type { GalleryAccess } from "@/contracts/share";
+import type { GalleryAccess, GalleryPreview } from "@/contracts/share";
 import { Button, Field, Input } from "@/components/ui";
 
 export interface ShareAccessGateProps {
   slug: string;
   access: Exclude<GalleryAccess, "ok">;
   initialToken?: string | null;
+  preview?: GalleryPreview | null;
 }
 
 interface GatePanelProps {
@@ -37,6 +38,7 @@ export function ShareAccessGate({
   slug,
   access,
   initialToken = null,
+  preview = null,
 }: ShareAccessGateProps) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -133,11 +135,17 @@ export function ShareAccessGate({
   };
 
   if (access === "password_required") {
+    const albumLabel = preview?.title
+      ? preview.photographerName
+        ? `${preview.title} by ${preview.photographerName}`
+        : preview.title
+      : "this photographic folio";
+
     return (
       <GatePanel
-        eyebrow="Protected folio"
-        title="Enter share password"
-        description="This photographic folio is protected by the organizer. Enter the password you were given to open the album."
+        eyebrow={preview?.photographerName ? `Protected folio · ${preview.photographerName}` : "Protected folio"}
+        title={preview?.title ? `Open ${preview.title}` : "Enter share password"}
+        description={`Enter the password you were given to open ${albumLabel}.`}
       >
         <form onSubmit={handlePasswordSubmit} className="auth-form" noValidate>
           <Field label="Password" htmlFor="share-password" error={error ?? undefined}>
@@ -165,8 +173,8 @@ export function ShareAccessGate({
   if (access === "magic_link_required") {
     return (
       <GatePanel
-        eyebrow="Personal invitation"
-        title="Unlock with your invitation"
+        eyebrow={preview?.photographerName ? `Personal invitation · ${preview.photographerName}` : "Personal invitation"}
+        title={preview?.title ? `Unlock ${preview.title}` : "Unlock with your invitation"}
         description="This folio requires a personal one-time invitation token. Open the link from your invitation or paste your token below."
       >
         <form onSubmit={handleMagicSubmit} className="auth-form" noValidate>
@@ -199,7 +207,7 @@ export function ShareAccessGate({
     return (
       <GatePanel
         eyebrow="Share expired"
-        title="This share link has expired"
+        title={preview?.title ? `${preview.title} has expired` : "This share link has expired"}
         description="The viewing window for this folio has closed. Contact the photographer or organizer if you need an updated link."
       >
         <p className="auth-note">
