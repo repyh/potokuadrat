@@ -16,10 +16,11 @@ export interface AccentPreset {
 
 export const ACCENT_PRESETS: readonly AccentPreset[] = [
   { label: "Lime leaf", hex: "#d9ef63" },
-  { label: "Terracotta", hex: "#b4532a" },
-  { label: "Botanical ink", hex: "#183c34" },
   { label: "Warm ochre", hex: "#d4a24c" },
-  { label: "Slate blue", hex: "#3d5a73" },
+  { label: "Pale sky", hex: "#b8d8e8" },
+  { label: "Blush", hex: "#f0c9c0" },
+  { label: "Mint", hex: "#c9f0d4" },
+  { label: "Butter", hex: "#f5e6a8" },
 ] as const;
 
 /**
