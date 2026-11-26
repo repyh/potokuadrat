@@ -2560,6 +2560,10 @@ select {
   gap: 16px;
 }
 
+.admin-metrics.is-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .admin-metric {
   display: grid;
   gap: 8px;
@@ -2985,7 +2989,8 @@ select {
     align-items: start;
   }
 
-  .admin-metrics {
+  .admin-metrics,
+  .admin-metrics.is-four {
     grid-template-columns: 1fr;
   }
 }

@@ -22,6 +22,7 @@ export interface NewAlbumFormProps {
   foldersError: string | null;
   /** Nested folder levels the indexer walks; read-only, from server config. */
   maxDepth: number;
+  initialFolder?: { driveFolderId: string; name?: string } | null;
 }
 
 const SOURCE_LABEL: Record<DriveFolderOption["source"], string> = {
@@ -47,10 +48,25 @@ function slugBase(title: string): string {
   );
 }
 
-export function NewAlbumForm({ folders, foldersError, maxDepth }: NewAlbumFormProps) {
+export function NewAlbumForm({
+  folders,
+  foldersError,
+  maxDepth,
+  initialFolder = null,
+}: NewAlbumFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [selected, setSelected] = useState<AlbumFolderInput[]>([]);
+  const [selected, setSelected] = useState<AlbumFolderInput[]>(() =>
+    initialFolder
+      ? [
+          {
+            driveFolderId: initialFolder.driveFolderId,
+            name: initialFolder.name,
+            recursive: true,
+          },
+        ]
+      : [],
+  );
   const [pasted, setPasted] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

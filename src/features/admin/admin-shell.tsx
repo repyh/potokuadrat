@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/albums", label: "Albums", exact: false },
   { href: "/admin/shares", label: "Shares", exact: false },
+  { href: "/admin/drive", label: "Drive", exact: false },
   { href: "/admin/settings", label: "Settings", exact: false },
 ] as const;
 

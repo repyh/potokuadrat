@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import AlbumDetailLoading from "./albums/[id]/loading";
 import AlbumsLoading from "./albums/loading";
 import NewAlbumLoading from "./albums/new/loading";
+import DriveLoading from "./drive/loading";
 import AdminLoading from "./loading";
 import SettingsLoading from "./settings/loading";
 import SharesLoading from "./shares/loading";
@@ -52,13 +53,18 @@ describe("admin loading boundaries", () => {
     expect(newAlbum).toContain("ui-fieldset");
   });
 
-  it("mirrors the album detail breadcrumbs, fieldsets, and share table", () => {
+  it("mirrors the album detail and drive breadcrumbs, fieldsets, and tables", () => {
     const markup = render(AlbumDetailLoading);
+    const drive = render(DriveLoading);
 
     expect(markup).toContain('aria-label="Loading album detail"');
     expect(markup).toContain("ui-breadcrumbs");
     expect(markup).toContain("ui-fieldset");
     expect(markup).toContain("Access");
     expect(markup).not.toContain("admin-metrics");
+
+    expect(drive).toContain('aria-label="Loading drive"');
+    expect(drive).toContain("ui-fieldset");
+    expect(drive).toContain("Folder");
   });
 });
