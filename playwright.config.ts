@@ -1,4 +1,13 @@
+import { existsSync } from "node:fs";
+
 import { defineConfig, devices } from "@playwright/test";
+import { config as loadEnv } from "dotenv";
+
+// The test process and the standalone server must read the same database and
+// secrets. Next loads .env files for the server, but Playwright does not, so load
+// them here as well. `.env.local` wins over `.env`.
+loadEnv({ path: ".env.local", quiet: true });
+loadEnv({ quiet: true });
 
 /**
  * End-to-end tests for the journeys a person actually walks: sign in, manage
@@ -56,6 +65,7 @@ import { defineConfig, devices } from "@playwright/test";
  *   "port in use" instead of a quiet wrong answer.
  */
 const PORT = process.env.E2E_PORT ?? "3100";
+const ENV_FILE = existsSync(".env.local") ? ".env.local" : existsSync(".env") ? ".env" : null;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -125,7 +135,9 @@ export default defineConfig({
           "npm run build",
           "cp -R public .next/standalone/public",
           "cp -R .next/static .next/standalone/.next/static",
-          `set -a && . ./.env.local && set +a && cd .next/standalone && PORT=${PORT} HOSTNAME=127.0.0.1 node server.js`,
+          `${
+            ENV_FILE ? `set -a && . ./${ENV_FILE} && set +a && ` : ""
+          }cd .next/standalone && PORT=${PORT} HOSTNAME=127.0.0.1 node server.js`,
         ].join(" && "),
         url: `http://127.0.0.1:${PORT}/login`,
         reuseExistingServer: false,

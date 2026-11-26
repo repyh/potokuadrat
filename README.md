@@ -64,10 +64,29 @@ forces a rebuild.
 | `npm run typecheck` | TypeScript without emit |
 | `npm test` | Vitest unit tests |
 | `npm run test:integration` | Auth and setup tests against `TEST_DATABASE_URL` |
+| `npm run test:e2e` | Playwright journeys against a seeded database |
+| `npm run test:e2e:ui` | Playwright UI mode for debugging |
 | `npm run db:generate` | Generate SQL migrations from the Drizzle schema |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Create the sample organization, admin, album, and shares |
 | `npm run db:studio` | Inspect the database |
+
+### End-to-end tests
+
+The Playwright suite signs in as the seeded admin and walks the guest and organizer
+journeys against a real Postgres and a production build.
+
+```bash
+npx playwright install chromium
+npm run db:migrate
+npm run db:seed
+npm run test:e2e
+```
+
+The config loads `.env.local` (then `.env`) and starts the standalone build on port
+3100, or uses `E2E_BASE_URL` when set. Seeded thumbnails are disabled in production
+builds, so bitmap and ZIP assertions run only with `E2E_SEED_MEDIA=1` against a dev
+server. Reports land in `playwright-report/` and test results in `test-results/`.
 
 ## Share media API
 

@@ -17,7 +17,7 @@ import { Client } from "pg";
 function connectionString(): string {
   return (
     process.env.DATABASE_URL ??
-    "postgresql://potokuadrat:potokuadrat@localhost:5433/potokuadrat"
+    "postgresql://potokuadrat:potokuadrat@localhost:5432/potokuadrat"
   );
 }
 
