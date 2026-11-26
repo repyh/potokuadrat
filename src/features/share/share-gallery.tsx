@@ -18,6 +18,7 @@ export interface ShareGalleryProps {
   policy: SharePolicy;
   initialPage: PhotoPage;
   initialFavoriteIds?: string[];
+  brandTitle?: string;
 }
 
 export const FILTER_LABELS: Record<PhotoFilter, string> = {
@@ -32,6 +33,25 @@ export const SORT_LABELS: Record<PhotoSort, string> = {
   name: "Name",
   taken: "Date taken",
 };
+
+export function formatShareBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  if (bytes < 1024) {
+    return `${Math.round(bytes)} B`;
+  }
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb >= 100 ? Math.round(kb) : kb.toFixed(1)} KB`;
+  }
+  const mb = kb / 1024;
+  if (mb < 1024) {
+    return `${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB`;
+  }
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+}
 
 export function resolvePreferredQuality(allowedQualities: DownloadQuality[]): DownloadQuality {
   return allowedQualities.includes("original") ? "original" : (allowedQualities[0] ?? "web");
@@ -58,6 +78,7 @@ export function ShareGallery({
   policy,
   initialPage,
   initialFavoriteIds = [],
+  brandTitle,
 }: ShareGalleryProps) {
   const [filter, setFilter] = useState<PhotoFilter>("all");
   const [sort, setSort] = useState<PhotoSort>("manual");
@@ -143,6 +164,7 @@ export function ShareGallery({
         setPhotos(initialPage.photos);
         setNextCursor(initialPage.nextCursor);
         setFilterTotal(initialPage.total);
+        setLoadingFilter(false);
         return;
       }
 
@@ -152,6 +174,7 @@ export function ShareGallery({
         if (!resetCache && allPhotos) {
           setPhotos(allPhotos);
           setNextCursor(null);
+          setLoadingFilter(false);
           return;
         }
 
@@ -159,6 +182,7 @@ export function ShareGallery({
           setAllPhotos(initialPage.photos);
           setPhotos(initialPage.photos);
           setNextCursor(null);
+          setLoadingFilter(false);
           return;
         }
 
@@ -299,85 +323,156 @@ export function ShareGallery({
   const expiryLabel = formatExpiry(policy.expiresAt);
   const showDownloadCta = policy.allowDownload && policy.allowedQualities.length > 0;
   const activeError = fetchError ?? favoriteError;
+  const totalSizeLabel = formatShareBytes(album.totalBytes);
+  const activeDestination: "photos" | "favorites" | "downloads" = downloadOpen
+    ? "downloads"
+    : filter === "favorites"
+      ? "favorites"
+      : "photos";
+
+  const filterCounts: Record<PhotoFilter, number> = {
+    all: album.photoCount,
+    favorites: favoriteCount,
+    landscape: album.orientationCounts.landscape,
+    portrait: album.orientationCounts.portrait,
+  };
 
   return (
-    <section className="share-folio" aria-labelledby="album-heading">
-      <header className="share-header">
-        <div className="share-header-copy">
-          <p className="hero-eyebrow">
-            {album.photographerName ?? "Client folio"} ·{" "}
-            <span className="tabular-nums">{album.photoCount}</span> photos
-            {expiryLabel ? ` · Available until ${expiryLabel}` : ""}
-          </p>
-          <h1 id="album-heading">{album.title}</h1>
-          {album.branding?.welcomeMessage && (
-            <p className="auth-lede">{album.branding.welcomeMessage}</p>
-          )}
+    <section
+      className={`share-folio-shell ${showDownloadCta ? "has-mobile-bar" : ""}`.trim()}
+      aria-labelledby="album-heading"
+    >
+      <aside className="share-spine" aria-label="Album folio">
+        <div className="share-spine-top">
+          <div className="share-spine-identity">
+            {(album.photographerName || brandTitle) && (
+              <p className="share-spine-kicker">
+                {album.photographerName ?? brandTitle}
+              </p>
+            )}
+            <h1 id="album-heading" className="share-spine-title">
+              {album.title}
+            </h1>
+            <p className="share-spine-meta tabular-nums">
+              <span>{album.photoCount} photos</span>
+              <span aria-hidden="true">·</span>
+              <span>{totalSizeLabel}</span>
+            </p>
+            {expiryLabel && (
+              <p className="share-spine-expiry">Available until {expiryLabel}</p>
+            )}
+            {album.branding?.welcomeMessage && (
+              <p className="share-spine-note">{album.branding.welcomeMessage}</p>
+            )}
+          </div>
+
+          <nav className="share-spine-nav" aria-label="Folio destinations">
+            <button
+              type="button"
+              aria-current={activeDestination === "photos" ? "page" : undefined}
+              onClick={() => void handleFilterChange("all")}
+              className={`share-dest ${activeDestination === "photos" ? "is-active" : ""}`.trim()}
+            >
+              <span className="share-dest-label">
+                <span className="share-dest-marker" aria-hidden="true" />
+                <span>Photos</span>
+              </span>
+              <span className="share-dest-count tabular-nums">{album.photoCount}</span>
+            </button>
+
+            <button
+              type="button"
+              aria-current={activeDestination === "favorites" ? "page" : undefined}
+              onClick={() => void handleFilterChange("favorites")}
+              className={`share-dest ${activeDestination === "favorites" ? "is-active" : ""}`.trim()}
+            >
+              <span className="share-dest-label">
+                <span className="share-dest-marker" aria-hidden="true" />
+                <span>Favorites</span>
+              </span>
+              <span className="share-dest-count tabular-nums">{favoriteCount}</span>
+            </button>
+
+            {showDownloadCta && (
+              <button
+                type="button"
+                aria-current={activeDestination === "downloads" ? "page" : undefined}
+                onClick={() => setDownloadOpen(true)}
+                disabled={album.photoCount === 0}
+                className={`share-dest ${activeDestination === "downloads" ? "is-active" : ""}`.trim()}
+              >
+                <span className="share-dest-label">
+                  <span className="share-dest-marker" aria-hidden="true" />
+                  <span>Downloads</span>
+                </span>
+                <span className="share-dest-count tabular-nums">{totalSizeLabel}</span>
+              </button>
+            )}
+          </nav>
         </div>
 
         {showDownloadCta && (
-          <div className="share-header-actions">
+          <div className="share-spine-foot">
             <Button
               variant="primary"
               size="md"
               onClick={() => setDownloadOpen(true)}
               disabled={album.photoCount === 0}
             >
-              Download all
+              Download all →
             </Button>
           </div>
         )}
-      </header>
+      </aside>
 
-      <div className="share-toolbar" role="region" aria-label="Gallery filters">
-        <div className="share-filter-row" role="tablist" aria-label="Filter photographs">
-          {(Object.keys(FILTER_LABELS) as PhotoFilter[]).map((key) => {
-            const isActive = filter === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => void handleFilterChange(key)}
-                className={`share-filter-chip ${isActive ? "is-active" : ""}`.trim()}
-              >
-                <span>{FILTER_LABELS[key]}</span>
-                {key === "favorites" && (
+      <div className="share-folio-main">
+        <div className="share-toolbar" role="region" aria-label="Gallery filters">
+          <div className="share-filter-row" role="tablist" aria-label="Filter photographs">
+            {(Object.keys(FILTER_LABELS) as PhotoFilter[]).map((key) => {
+              const isActive = filter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => void handleFilterChange(key)}
+                  className={`share-filter-chip ${isActive ? "is-active" : ""}`.trim()}
+                >
+                  <span>{FILTER_LABELS[key]}</span>
                   <span className="share-filter-count tabular-nums">
-                    {favoriteCount}
+                    {filterCounts[key]}
                   </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="share-toolbar-end">
-          <div className="share-sort-select">
-            <Select
-              aria-label="Sort photographs"
-              value={sort}
-              disabled={loadingFilter}
-              onChange={(event) => void handleSortChange(event.target.value as PhotoSort)}
-              options={(Object.keys(SORT_LABELS) as PhotoSort[]).map((key) => ({
-                value: key,
-                label: SORT_LABELS[key],
-              }))}
-            />
+                </button>
+              );
+            })}
           </div>
 
-          <p className="share-toolbar-count tabular-nums">
-            Showing {visiblePhotos.length} of {displayedTotal}
-          </p>
-        </div>
-      </div>
+          <div className="share-toolbar-end">
+            <div className="share-sort-select">
+              <Select
+                aria-label="Sort photographs"
+                value={sort}
+                disabled={loadingFilter}
+                onChange={(event) => void handleSortChange(event.target.value as PhotoSort)}
+                options={(Object.keys(SORT_LABELS) as PhotoSort[]).map((key) => ({
+                  value: key,
+                  label: SORT_LABELS[key],
+                }))}
+              />
+            </div>
 
-      {activeError && (
-        <Alert tone="danger" title="Something went wrong">
-          {activeError}
-        </Alert>
-      )}
+            <p className="share-toolbar-count tabular-nums">
+              Showing {visiblePhotos.length} of {displayedTotal}
+            </p>
+          </div>
+        </div>
+
+        {activeError && (
+          <Alert tone="danger" title="Something went wrong">
+            {activeError}
+          </Alert>
+        )}
 
       {loadingFilter ? (
         <ShareGridSkeleton label="Loading photographs" />
@@ -481,6 +576,24 @@ export function ShareGallery({
             </div>
           )}
         </>
+      )}
+
+      </div>
+
+      {showDownloadCta && (
+        <div className="share-mobile-bar">
+          <span className="share-mobile-bar-meta tabular-nums">
+            {album.photoCount} photos · {totalSizeLabel}
+          </span>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setDownloadOpen(true)}
+            disabled={album.photoCount === 0}
+          >
+            Download
+          </Button>
+        </div>
       )}
 
       <ShareLightbox

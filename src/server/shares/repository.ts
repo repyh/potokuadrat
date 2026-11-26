@@ -33,7 +33,11 @@ export interface ShareRecord {
   albumBranding: BrandingOverride | null;
   photographerName: string | null;
   photoCount: number;
+  totalBytes?: number;
+  landscapeCount?: number;
+  portraitCount?: number;
   organizationStripMetadata: boolean;
+  organizationFooterEnabled?: boolean;
 }
 
 export interface SharePhotoRecord {
@@ -203,11 +207,25 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
           albumBranding: albums.branding,
           photographerName: users.name,
           photoCount:
-            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null)`.mapWith(
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          totalBytes:
+            sql<number>`(select coalesce(sum(p.bytes), 0) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          landscapeCount:
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and p.width is not null and p.height is not null and p.width >= p.height and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
+              Number,
+            ),
+          portraitCount:
+            sql<number>`(select count(*) from photos p where p.album_id = ${shares.albumId} and p.missing_at is null and p.width is not null and p.height is not null and p.height > p.width and (not exists (select 1 from share_photos sp where sp.share_id = ${shares.id}) or exists (select 1 from share_photos sp where sp.share_id = ${shares.id} and sp.photo_id = p.id)))`.mapWith(
               Number,
             ),
           organizationStripMetadata:
             sql<boolean | null>`(select strip_metadata from organizations limit 1)`,
+          organizationFooterEnabled:
+            sql<boolean | null>`(select footer_enabled from organizations limit 1)`,
         })
         .from(shares)
         .innerJoin(albums, eq(shares.albumId, albums.id))
@@ -223,6 +241,7 @@ export function createDrizzleShareRepository(db: Database): ShareRepository {
         ...row,
         // Without an organization row the safe default still applies.
         organizationStripMetadata: row.organizationStripMetadata ?? true,
+        organizationFooterEnabled: row.organizationFooterEnabled ?? true,
       };
     },
 

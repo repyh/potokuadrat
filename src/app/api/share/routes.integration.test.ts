@@ -226,14 +226,24 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
       expect((await expired.json()).access).toBe("expired");
     });
 
-    it("never leaks album or policy details to a gated caller", async () => {
+    it("exposes only album preview metadata to a gated caller", async () => {
       const response = await shareRoute.GET(
         new Request(`http://localhost:3000/api/share/magic-share`),
         context({ slug: "magic-share" }),
       );
 
       const body = await response.json();
-      expect(body).toEqual({ access: "magic_link_required", album: null, policy: null });
+      expect(body).toEqual({
+        access: "magic_link_required",
+        album: null,
+        policy: null,
+        preview: {
+          title: "Album",
+          branding: null,
+          photographerName: "Owner",
+          footerEnabled: true,
+        },
+      });
     });
   });
 

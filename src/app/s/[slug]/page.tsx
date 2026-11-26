@@ -4,7 +4,12 @@ import Link from "next/link";
 import { connection } from "next/server";
 
 import type { PhotoPage } from "@/contracts/album";
-import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
+import type {
+  GalleryAlbum,
+  GalleryPreview,
+  GalleryState,
+  SharePolicy,
+} from "@/contracts/share";
 import { ShareAccessGate } from "@/features/share/share-access-gate";
 import { ShareGallery } from "@/features/share/share-gallery";
 import { getAnalyticsService } from "@/server/analytics/runtime";
@@ -35,7 +40,7 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
 
   if (!share) {
     return {
-      state: { access: "unavailable", album: null, policy: null },
+      state: { access: "unavailable", album: null, policy: null, preview: null },
       initialPage: emptyPage,
       initialFavoriteIds: [],
     };
@@ -47,8 +52,15 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   const access = resolveShareAccess(share, new Date(), authorization.authorized);
 
   if (access !== "ok") {
+    const preview: GalleryPreview = {
+      title: share.albumTitle,
+      branding: share.albumBranding,
+      photographerName: share.photographerName,
+      footerEnabled: share.organizationFooterEnabled ?? true,
+    };
+
     return {
-      state: { access, album: null, policy: null },
+      state: { access, album: null, policy: null, preview },
       initialPage: emptyPage,
       initialFavoriteIds: [],
     };
@@ -57,11 +69,16 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   // A gallery that is actually shown counts as one view. Gates and error states do not.
   await getAnalyticsService().recordGalleryView(share.id, reqHeaders);
 
-
   const album: GalleryAlbum = {
     slug: share.albumSlug,
     title: share.albumTitle,
     photoCount: share.photoCount,
+    totalBytes: share.totalBytes ?? 0,
+    orientationCounts: {
+      landscape: share.landscapeCount ?? 0,
+      portrait: share.portraitCount ?? 0,
+    },
+    footerEnabled: share.organizationFooterEnabled ?? true,
     branding: share.albumBranding,
     photographerName: share.photographerName,
   };
@@ -81,7 +98,7 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   ]);
 
   return {
-    state: { access, album, policy },
+    state: { access, album, policy, preview: null },
     initialPage: galleryResult.ok ? galleryResult.page : emptyPage,
     initialFavoriteIds: favoritesResult && favoritesResult.ok ? favoritesResult.favorites.photoIds : [],
   };
@@ -95,8 +112,11 @@ export default async function SharePage({ params, searchParams }: PageProps) {
     typeof resolvedSearchParams.token === "string" ? resolvedSearchParams.token : null;
 
   const { state, initialPage, initialFavoriteIds } = await loadSharePayload(slug);
-  const brandTitle = state.album?.branding?.title?.trim() || "Potokuadrat";
-  const brandAccent = state.album?.branding?.accent?.trim();
+  const activeBranding = state.album?.branding ?? state.preview?.branding ?? null;
+  const brandTitle = activeBranding?.title?.trim() || "Potokuadrat";
+  const photographerName = state.album?.photographerName ?? state.preview?.photographerName ?? null;
+  const footerEnabled = state.album?.footerEnabled ?? state.preview?.footerEnabled ?? true;
+  const brandAccent = activeBranding?.accent?.trim();
   const brandStyle = brandAccent
     ? ({ "--brand-accent": brandAccent } as CSSProperties)
     : undefined;
@@ -112,9 +132,9 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             <span>{brandTitle}</span>
           </Link>
 
-          {state.album?.photographerName && (
+          {photographerName && (
             <div className="navbar-actions">
-              <span className="navbar-user">{state.album.photographerName}</span>
+              <span className="navbar-user">{photographerName}</span>
             </div>
           )}
         </div>
@@ -126,6 +146,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             slug={slug}
             access={state.access === "ok" ? "unavailable" : state.access}
             initialToken={initialToken}
+            preview={state.preview ?? null}
           />
         ) : (
           <ShareGallery
@@ -134,9 +155,17 @@ export default async function SharePage({ params, searchParams }: PageProps) {
             policy={state.policy}
             initialPage={initialPage}
             initialFavoriteIds={initialFavoriteIds}
+            brandTitle={brandTitle}
           />
         )}
       </div>
+
+      {footerEnabled && (
+        <footer className="share-folio-footer">
+          <span>{brandTitle}</span>
+          {photographerName && <span>Delivered by {photographerName}</span>}
+        </footer>
+      )}
     </main>
   );
 }
