@@ -16,6 +16,7 @@ export interface ShareComposerDraft {
   allowWeb: boolean;
   metadataPolicy: MetadataPolicyChoice;
   brandingTitle: string;
+  brandingLogo: string;
   brandingAccent: string;
   brandingWelcomeMessage: string;
 }
@@ -27,6 +28,7 @@ export interface ShareComposerErrors {
   expiryDate?: string;
   qualities?: string;
   brandingTitle?: string;
+  brandingLogo?: string;
   brandingAccent?: string;
   brandingWelcomeMessage?: string;
 }
@@ -114,11 +116,15 @@ export function validateAndBuildShareInput(
   }
 
   const title = draft.brandingTitle.trim();
+  const logo = draft.brandingLogo.trim();
   const accent = draft.brandingAccent.trim();
   const welcomeMessage = draft.brandingWelcomeMessage.trim();
 
   if (title.length > 120) {
     errors.brandingTitle = "Keep the title under 120 characters.";
+  }
+  if (logo.length > 2000) {
+    errors.brandingLogo = "Keep the logo URL under 2000 characters.";
   }
   if (accent && !HEX_COLOR_PATTERN.test(accent)) {
     errors.brandingAccent = "Use a six-digit hex color like #b4532a.";
@@ -134,6 +140,9 @@ export function validateAndBuildShareInput(
   const branding: BrandingOverride = {};
   if (title) {
     branding.title = title;
+  }
+  if (logo) {
+    branding.logo = logo;
   }
   if (accent) {
     branding.accent = accent;

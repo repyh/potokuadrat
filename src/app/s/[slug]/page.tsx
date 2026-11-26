@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
@@ -10,11 +11,13 @@ import type {
   GalleryState,
   SharePolicy,
 } from "@/contracts/share";
+import { BrandMark } from "@/components/brand-mark";
 import { ShareAccessGate } from "@/features/share/share-access-gate";
 import { ShareGallery } from "@/features/share/share-gallery";
 import { getAnalyticsService } from "@/server/analytics/runtime";
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareAccess } from "@/server/shares/access";
+import { resolveEffectiveBranding } from "@/server/shares/branding";
 import { listFavorites } from "@/server/shares/favorites";
 import { listShareGallery } from "@/server/shares/gallery";
 import { resolveStripMetadata } from "@/server/shares/policy";
@@ -31,6 +34,35 @@ interface SharePagePayload {
   state: GalleryState;
   initialPage: PhotoPage;
   initialFavoriteIds: string[];
+  photographerName: string | null;
+}
+
+export async function generateMetadata({
+  params,
+}: Pick<PageProps, "params">): Promise<Metadata> {
+  await connection();
+  const { slug } = await params;
+  const share = await getShareRepository().findBySlug(slug);
+  if (!share) {
+    return { title: "Unavailable — Potokuadrat" };
+  }
+
+  const resolvedBranding = resolveEffectiveBranding({
+    share: share.shareBranding,
+    album: share.albumBranding,
+    organization: {
+      name: share.organizationName,
+      title: share.organizationTitle,
+      logo: share.organizationLogo,
+      accent: share.organizationAccent,
+      footerEnabled: share.organizationFooterEnabled,
+    },
+  });
+
+  return {
+    title: `${share.albumTitle} — ${resolvedBranding.title}`,
+    ...(resolvedBranding.logo ? { icons: { icon: resolvedBranding.logo } } : {}),
+  };
 }
 
 async function loadSharePayload(slug: string): Promise<SharePagePayload> {
@@ -40,11 +72,24 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
 
   if (!share) {
     return {
-      state: { access: "unavailable", album: null, policy: null, preview: null },
+      state: { access: "unavailable", album: null, policy: null, resolvedBranding: null, preview: null },
       initialPage: emptyPage,
       initialFavoriteIds: [],
+      photographerName: null,
     };
   }
+
+  const resolvedBranding = resolveEffectiveBranding({
+    share: share.shareBranding,
+    album: share.albumBranding,
+    organization: {
+      name: share.organizationName,
+      title: share.organizationTitle,
+      logo: share.organizationLogo,
+      accent: share.organizationAccent,
+      footerEnabled: share.organizationFooterEnabled,
+    },
+  });
 
   const reqHeaders = await headers();
   const request = new Request("http://localhost", { headers: reqHeaders });
@@ -60,9 +105,10 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
     };
 
     return {
-      state: { access, album: null, policy: null, preview },
+      state: { access, album: null, policy: null, resolvedBranding, preview },
       initialPage: emptyPage,
       initialFavoriteIds: [],
+      photographerName: share.photographerName,
     };
   }
 
@@ -79,7 +125,13 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
       portrait: share.portraitCount ?? 0,
     },
     footerEnabled: share.organizationFooterEnabled ?? true,
-    branding: share.albumBranding,
+    branding: {
+      title: resolvedBranding.title,
+      logo: resolvedBranding.logo ?? undefined,
+      accent: resolvedBranding.accent ?? undefined,
+      welcomeMessage: resolvedBranding.welcomeMessage ?? undefined,
+    },
+    resolvedBranding,
     photographerName: share.photographerName,
   };
   const policy: SharePolicy = {
@@ -98,9 +150,10 @@ async function loadSharePayload(slug: string): Promise<SharePagePayload> {
   ]);
 
   return {
-    state: { access, album, policy, preview: null },
+    state: { access, album, policy, resolvedBranding, preview: null },
     initialPage: galleryResult.ok ? galleryResult.page : emptyPage,
     initialFavoriteIds: favoritesResult && favoritesResult.ok ? favoritesResult.favorites.photoIds : [],
+    photographerName: share.photographerName,
   };
 }
 
@@ -111,12 +164,12 @@ export default async function SharePage({ params, searchParams }: PageProps) {
   const initialToken =
     typeof resolvedSearchParams.token === "string" ? resolvedSearchParams.token : null;
 
-  const { state, initialPage, initialFavoriteIds } = await loadSharePayload(slug);
-  const activeBranding = state.album?.branding ?? state.preview?.branding ?? null;
-  const brandTitle = activeBranding?.title?.trim() || "Potokuadrat";
-  const photographerName = state.album?.photographerName ?? state.preview?.photographerName ?? null;
-  const footerEnabled = state.album?.footerEnabled ?? state.preview?.footerEnabled ?? true;
-  const brandAccent = activeBranding?.accent?.trim();
+  const { state, initialPage, initialFavoriteIds, photographerName } = await loadSharePayload(slug);
+  const resolvedBranding = state.album?.resolvedBranding ?? state.resolvedBranding ?? null;
+  const brandTitle = resolvedBranding?.title ?? "Potokuadrat";
+  const brandLogo = resolvedBranding?.logo ?? null;
+  const brandAccent = resolvedBranding?.accent ?? null;
+  const footerEnabled = resolvedBranding?.footerEnabled ?? true;
   const brandStyle = brandAccent
     ? ({ "--brand-accent": brandAccent } as CSSProperties)
     : undefined;
@@ -126,9 +179,7 @@ export default async function SharePage({ params, searchParams }: PageProps) {
       <header className="site-navbar">
         <div className="navbar-inner">
           <Link className="navbar-brand" href="/" aria-label={brandTitle}>
-            <span className="brand-stamp" aria-hidden="true">
-              {brandTitle.charAt(0).toUpperCase()}
-            </span>
+            <BrandMark title={brandTitle} logo={brandLogo} />
             <span>{brandTitle}</span>
           </Link>
 

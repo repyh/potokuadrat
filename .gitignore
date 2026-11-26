@@ -39,6 +39,7 @@ yarn-error.log*
 
 # local runtime data
 /.cache
+/.data
 /secrets/
 
 # vercel

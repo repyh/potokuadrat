@@ -19,6 +19,7 @@ function baseDraft(overrides: Partial<ShareComposerDraft> = {}): ShareComposerDr
     allowWeb: true,
     metadataPolicy: "inherit",
     brandingTitle: "",
+    brandingLogo: "",
     brandingAccent: "",
     brandingWelcomeMessage: "",
     ...overrides,
@@ -116,6 +117,7 @@ describe("validateAndBuildShareInput", () => {
       baseDraft({
         metadataPolicy: "keep",
         brandingTitle: "  Lina & Bima  ",
+        brandingLogo: " https://example.com/logo.png ",
         brandingAccent: " #b4532a ",
         brandingWelcomeMessage: "  Welcome home.  ",
       }),
@@ -125,6 +127,7 @@ describe("validateAndBuildShareInput", () => {
       expect(ok.input.stripMetadata).toBe(false);
       expect(ok.input.branding).toEqual({
         title: "Lina & Bima",
+        logo: "https://example.com/logo.png",
         accent: "#b4532a",
         welcomeMessage: "Welcome home.",
       });

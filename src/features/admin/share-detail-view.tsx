@@ -34,6 +34,7 @@ import {
   Switch,
   Textarea,
 } from "@/components/ui";
+import { BrandMark } from "@/components/brand-mark";
 
 import { formatCount, formatDay, formatRelative } from "./format";
 import { ShareRevokeDialog } from "./share-revoke-dialog";
@@ -46,6 +47,7 @@ export interface ShareDetailViewProps {
   orgDefaults: {
     name: string;
     title: string | null;
+    logo: string | null;
     accent: string | null;
     stripMetadata: boolean;
   };
@@ -123,6 +125,7 @@ export function ShareDetailView({
   const [savingSubset, setSavingSubset] = useState(false);
 
   const [brandingTitle, setBrandingTitle] = useState(initialShare.branding?.title ?? "");
+  const [brandingLogo, setBrandingLogo] = useState(initialShare.branding?.logo ?? "");
   const [brandingAccent, setBrandingAccent] = useState(initialShare.branding?.accent ?? "");
   const [brandingWelcome, setBrandingWelcome] = useState(
     initialShare.branding?.welcomeMessage ?? "",
@@ -390,6 +393,7 @@ export function ShareDetailView({
 
     const branding: BrandingOverride = {};
     const trimmedTitle = brandingTitle.trim();
+    const trimmedLogo = brandingLogo.trim();
     const trimmedAccent = brandingAccent.trim();
     const trimmedWelcome = brandingWelcome.trim();
 
@@ -402,12 +406,11 @@ export function ShareDetailView({
       return;
     }
 
-    // The detail view does not edit the logo yet; keep an existing override.
-    if (share.branding?.logo) {
-      branding.logo = share.branding.logo;
-    }
     if (trimmedTitle) {
       branding.title = trimmedTitle;
+    }
+    if (trimmedLogo) {
+      branding.logo = trimmedLogo;
     }
     if (trimmedAccent) {
       branding.accent = trimmedAccent;
@@ -890,6 +893,28 @@ export function ShareDetailView({
                 placeholder={orgDefaults.title || orgDefaults.name}
                 onChange={(event) => setBrandingTitle(event.target.value)}
               />
+            </Field>
+
+            <Field
+              htmlFor="detail-branding-logo"
+              label="Logo URL override"
+              optionalLabel="Optional"
+              hint={orgDefaults.logo ? "Leave blank to inherit the organization logo." : "Leave blank to use the title initial."}
+            >
+              <div className="brand-preview-row">
+                <BrandMark
+                  title={brandingTitle || orgDefaults.title || orgDefaults.name}
+                  logo={brandingLogo || orgDefaults.logo}
+                />
+                <Input
+                  id="detail-branding-logo"
+                  value={brandingLogo}
+                  maxLength={2000}
+                  disabled={savingBranding}
+                  placeholder={orgDefaults.logo ?? "https://example.com/logo.png"}
+                  onChange={(event) => setBrandingLogo(event.target.value)}
+                />
+              </div>
             </Field>
 
             <Field

@@ -50,6 +50,7 @@ forces a rebuild.
 | `DRIVE_INDEX_MAX_DEPTH` | Recursion depth while listing folders (default 5) |
 | `THUMB_CACHE_DIR` | Thumbnail cache directory |
 | `THUMB_CACHE_MAX_BYTES` / `THUMB_CACHE_MAX_FILES` | Cache cap and LRU eviction |
+| `BRANDING_DIR` | Uploaded logo directory (Docker uses the `branding` volume) |
 | `STRIP_METADATA` | `1` (default) strips EXIF/IPTC/comments from thumbnails |
 | `SMTP_*` | Optional SMTP for magic links; without it links are copied manually |
 | `ANALYTICS_RETENTION_MONTHS` | Retention for first-party analytics (default 12) |

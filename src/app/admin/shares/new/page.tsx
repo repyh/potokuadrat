@@ -40,6 +40,7 @@ export default async function NewSharePage({ searchParams }: NewSharePageProps) 
       orgDefaults={{
         name: organization.name,
         title: organization.title,
+        logo: organization.logo,
         accent: organization.accent,
         stripMetadata: organization.stripMetadata,
       }}

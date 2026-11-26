@@ -48,6 +48,7 @@ export default async function AdminShareDetailPage({ params }: ShareDetailPagePr
       orgDefaults={{
         name: organization.name,
         title: organization.title,
+        logo: organization.logo,
         accent: organization.accent,
         stripMetadata: organization.stripMetadata,
       }}

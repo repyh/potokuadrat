@@ -20,6 +20,7 @@ import {
   Switch,
   Textarea,
 } from "@/components/ui";
+import { BrandMark } from "@/components/brand-mark";
 
 import {
   validateAndBuildShareInput,
@@ -41,6 +42,7 @@ export interface NewShareFormProps {
   orgDefaults: {
     name: string;
     title: string | null;
+    logo: string | null;
     accent: string | null;
     stripMetadata: boolean;
   };
@@ -69,6 +71,7 @@ export function NewShareForm({
   const [allowWeb, setAllowWeb] = useState(true);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicyChoice>("inherit");
   const [brandingTitle, setBrandingTitle] = useState("");
+  const [brandingLogo, setBrandingLogo] = useState("");
   const [brandingAccent, setBrandingAccent] = useState("");
   const [brandingWelcomeMessage, setBrandingWelcomeMessage] = useState("");
 
@@ -142,6 +145,7 @@ export function NewShareForm({
       allowWeb,
       metadataPolicy,
       brandingTitle,
+      brandingLogo,
       brandingAccent,
       brandingWelcomeMessage,
     });
@@ -541,6 +545,33 @@ export function NewShareForm({
                   setErrors((prev) => ({ ...prev, brandingTitle: undefined }));
                 }}
               />
+            </Field>
+
+            <Field
+              htmlFor="share-branding-logo"
+              label="Logo URL override"
+              optionalLabel="Optional"
+              hint={orgDefaults.logo ? "Leave blank to inherit the organization logo." : "Leave blank to use the title initial."}
+              error={errors.brandingLogo}
+            >
+              <div className="brand-preview-row">
+                <BrandMark
+                  title={brandingTitle || orgDefaults.title || orgDefaults.name}
+                  logo={brandingLogo || orgDefaults.logo}
+                />
+                <Input
+                  id="share-branding-logo"
+                  value={brandingLogo}
+                  maxLength={2000}
+                  disabled={submitting}
+                  invalid={Boolean(errors.brandingLogo)}
+                  placeholder={orgDefaults.logo ?? "https://example.com/logo.png"}
+                  onChange={(event) => {
+                    setBrandingLogo(event.target.value);
+                    setErrors((prev) => ({ ...prev, brandingLogo: undefined }));
+                  }}
+                />
+              </div>
             </Field>
 
             <Field

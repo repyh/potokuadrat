@@ -12,9 +12,11 @@
   --ground: #e9eee2;
   --ink: #183c34;
   --paper: #f8f8f0;
+  --surface: #f8f8f0;
   --accent: #d9ef63;
   --quiet: #50675d;
   --line: #c6d0c3;
+  --rule: #c6d0c3;
   --font-display: "Young Serif", Georgia, serif;
   --font-body: Arial, Helvetica, sans-serif;
   color-scheme: light;
@@ -119,10 +121,61 @@ button:focus-visible,
   height: 40px;
   flex: 0 0 auto;
   place-items: center;
+  overflow: hidden;
   background: var(--accent);
   color: var(--ink);
   font-family: var(--font-display);
   font-size: 22px;
+}
+
+.brand-stamp-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-accent-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brand-accent-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.brand-accent-swatch.is-active {
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.brand-accent-dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  flex: 0 0 auto;
+}
+
+.brand-accent-preview {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+}
+
+.brand-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .navbar-login-btn {

@@ -237,6 +237,13 @@ describe.skipIf(!databaseUrl)("share route handlers", () => {
         access: "magic_link_required",
         album: null,
         policy: null,
+        resolvedBranding: {
+          title: "Org",
+          logo: null,
+          accent: null,
+          welcomeMessage: null,
+          footerEnabled: true,
+        },
         preview: {
           title: "Album",
           branding: null,
