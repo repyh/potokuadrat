@@ -49,10 +49,13 @@ function failed(error: unknown): ActionResult<never> {
   return { ok: false, error: "Something went wrong. Try again.", code: "internal" };
 }
 
-function refreshAlbumPages(): void {
+function refreshAlbumPages(shareId?: string): void {
   revalidatePath("/admin/albums");
   revalidatePath("/admin/shares");
   revalidatePath("/admin");
+  if (shareId) {
+    revalidatePath(`/admin/shares/${shareId}`);
+  }
 }
 
 async function adminUserId(): Promise<string | null> {
@@ -130,7 +133,7 @@ export async function updateShareAction(
 
   try {
     const share = await getShareAdminService().update(userId, parsedId.data, parsed.data);
-    refreshAlbumPages();
+    refreshAlbumPages(parsedId.data);
     return { ok: true, data: { share } };
   } catch (error) {
     return failed(error);
@@ -155,7 +158,7 @@ export async function deleteShareAction(
     if (!removed) {
       return notFound("Share not found.");
     }
-    refreshAlbumPages();
+    refreshAlbumPages(parsed.data);
     return { ok: true, data: { shareId: parsed.data } };
   } catch (error) {
     return failed(error);
@@ -187,7 +190,7 @@ export async function setSharePhotosAction(
       parsedId.data,
       parsedPhotos.data,
     );
-    refreshAlbumPages();
+    refreshAlbumPages(parsedId.data);
     return { ok: true, data: { share } };
   } catch (error) {
     return failed(error);
@@ -219,7 +222,7 @@ export async function addShareRecipientAction(
       parsedId.data,
       parsedEmail.data,
     );
-    refreshAlbumPages();
+    refreshAlbumPages(parsedId.data);
     return { ok: true, data: link };
   } catch (error) {
     return failed(error);
@@ -253,7 +256,7 @@ export async function removeShareRecipientAction(
     if (!removed) {
       return notFound("Share not found.");
     }
-    refreshAlbumPages();
+    refreshAlbumPages(parsedShare.data);
     return { ok: true, data: { recipientId: parsedRecipient.data } };
   } catch (error) {
     return failed(error);
@@ -284,7 +287,7 @@ export async function reissueMagicLinkAction(
       parsedShare.data,
       parsedRecipient.data,
     );
-    refreshAlbumPages();
+    refreshAlbumPages(parsedShare.data);
     return { ok: true, data: link };
   } catch (error) {
     return failed(error);
