@@ -2158,6 +2158,27 @@ select {
   font-size: 13px;
 }
 
+.share-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.share-sort-select {
+  min-width: 140px;
+}
+
+.share-sort-select .ui-select-control {
+  min-height: 36px;
+  height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .share-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

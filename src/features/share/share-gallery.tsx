@@ -2,9 +2,9 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import type { Photo, PhotoFilter, PhotoPage } from "@/contracts/album";
+import type { Photo, PhotoFilter, PhotoPage, PhotoSort } from "@/contracts/album";
 import type { DownloadQuality, GalleryAlbum, SharePolicy } from "@/contracts/share";
-import { Alert, Button, EmptyState } from "@/components/ui";
+import { Alert, Button, EmptyState, Select } from "@/components/ui";
 
 import { countFavorites, loadAllRemainingPhotos, resolveGalleryTotal } from "./gallery-pages";
 import { ShareDownloadDialog } from "./share-download-dialog";
@@ -25,6 +25,12 @@ export const FILTER_LABELS: Record<PhotoFilter, string> = {
   favorites: "Favorites",
   landscape: "Landscape",
   portrait: "Portrait",
+};
+
+export const SORT_LABELS: Record<PhotoSort, string> = {
+  manual: "Manual",
+  name: "Name",
+  taken: "Date taken",
 };
 
 export function resolvePreferredQuality(allowedQualities: DownloadQuality[]): DownloadQuality {
@@ -54,6 +60,7 @@ export function ShareGallery({
   initialFavoriteIds = [],
 }: ShareGalleryProps) {
   const [filter, setFilter] = useState<PhotoFilter>("all");
+  const [sort, setSort] = useState<PhotoSort>("manual");
   const [photos, setPhotos] = useState<Photo[]>(initialPage.photos);
   const [allPhotos, setAllPhotos] = useState<Photo[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(initialPage.nextCursor);
@@ -94,10 +101,15 @@ export function ShareGallery({
   const requestPhotoPage = useCallback(
     async (
       filterValue: PhotoFilter,
+      sortValue: PhotoSort,
       cursor: string | null,
       fallback: string,
     ): Promise<PhotoPage> => {
-      const params = new URLSearchParams({ filter: filterValue, limit: "50" });
+      const params = new URLSearchParams({
+        filter: filterValue,
+        sort: sortValue,
+        limit: "50",
+      });
       if (cursor) {
         params.set("cursor", cursor);
       }
@@ -116,16 +128,18 @@ export function ShareGallery({
     [slug],
   );
 
-  const handleFilterChange = useCallback(
-    async (nextFilter: PhotoFilter) => {
+  const loadSelection = useCallback(
+    async (nextFilter: PhotoFilter, nextSort: PhotoSort, resetCache: boolean) => {
       const requestId = ++filterRequestRef.current;
       const isCurrent = () => requestId === filterRequestRef.current;
 
-      setFilter(nextFilter);
       setFetchError(null);
       setLightboxIndex(null);
+      if (resetCache) {
+        setAllPhotos(null);
+      }
 
-      if (nextFilter === "all") {
+      if (nextFilter === "all" && nextSort === "manual") {
         setPhotos(initialPage.photos);
         setNextCursor(initialPage.nextCursor);
         setFilterTotal(initialPage.total);
@@ -133,15 +147,15 @@ export function ShareGallery({
       }
 
       // For public/password favorites, load every album page once so the local
-      // filter covers the whole share. The cache lets a revisit skip the refetch.
+      // filter covers the whole share in the active sort order.
       if (nextFilter === "favorites" && policy.mode !== "magic_link") {
-        if (allPhotos) {
+        if (!resetCache && allPhotos) {
           setPhotos(allPhotos);
           setNextCursor(null);
           return;
         }
 
-        if (!initialPage.nextCursor) {
+        if (nextSort === "manual" && !initialPage.nextCursor) {
           setAllPhotos(initialPage.photos);
           setPhotos(initialPage.photos);
           setNextCursor(null);
@@ -150,8 +164,20 @@ export function ShareGallery({
 
         setLoadingFilter(true);
         try {
-          const loaded = await loadAllRemainingPhotos(initialPage, (cursor) =>
-            requestPhotoPage("all", cursor, "Unable to load all photos for favorites."),
+          const seedPage =
+            nextSort === "manual"
+              ? initialPage
+              : await requestPhotoPage(
+                  "all",
+                  nextSort,
+                  null,
+                  "Unable to load sorted photos for favorites.",
+                );
+          if (!isCurrent()) {
+            return;
+          }
+          const loaded = await loadAllRemainingPhotos(seedPage, (cursor) =>
+            requestPhotoPage("all", nextSort, cursor, "Unable to load all photos for favorites."),
           );
           if (!isCurrent()) {
             return;
@@ -180,6 +206,7 @@ export function ShareGallery({
       try {
         const page = await requestPhotoPage(
           nextFilter,
+          nextSort,
           null,
           "Unable to filter photos right now.",
         );
@@ -203,6 +230,22 @@ export function ShareGallery({
     [allPhotos, initialPage, policy.mode, requestPhotoPage],
   );
 
+  const handleFilterChange = useCallback(
+    async (nextFilter: PhotoFilter) => {
+      setFilter(nextFilter);
+      await loadSelection(nextFilter, sort, false);
+    },
+    [loadSelection, sort],
+  );
+
+  const handleSortChange = useCallback(
+    async (nextSort: PhotoSort) => {
+      setSort(nextSort);
+      await loadSelection(filter, nextSort, true);
+    },
+    [filter, loadSelection],
+  );
+
   const handleLoadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) {
       return;
@@ -218,6 +261,7 @@ export function ShareGallery({
     try {
       const page = await requestPhotoPage(
         serverFilter,
+        sort,
         nextCursor,
         "Unable to load more photos.",
       );
@@ -235,7 +279,7 @@ export function ShareGallery({
     } finally {
       setLoadingMore(false);
     }
-  }, [filter, loadingMore, nextCursor, policy.mode, requestPhotoPage]);
+  }, [filter, loadingMore, nextCursor, policy.mode, requestPhotoPage, sort]);
 
   const handleToggleFavorite = useCallback(
     async (photoId: string) => {
@@ -309,9 +353,24 @@ export function ShareGallery({
           })}
         </div>
 
-        <p className="share-toolbar-count tabular-nums">
-          Showing {visiblePhotos.length} of {displayedTotal}
-        </p>
+        <div className="share-toolbar-end">
+          <div className="share-sort-select">
+            <Select
+              aria-label="Sort photographs"
+              value={sort}
+              disabled={loadingFilter}
+              onChange={(event) => void handleSortChange(event.target.value as PhotoSort)}
+              options={(Object.keys(SORT_LABELS) as PhotoSort[]).map((key) => ({
+                value: key,
+                label: SORT_LABELS[key],
+              }))}
+            />
+          </div>
+
+          <p className="share-toolbar-count tabular-nums">
+            Showing {visiblePhotos.length} of {displayedTotal}
+          </p>
+        </div>
       </div>
 
       {activeError && (
