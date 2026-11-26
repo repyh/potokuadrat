@@ -9,6 +9,7 @@ import type {
   DriveFolderOption,
   DriveFoldersResponse,
 } from "@/contracts/admin";
+import type { Photo } from "@/contracts/album";
 import type {
   DownloadQuality,
   IssuedMagicLink,
@@ -38,6 +39,7 @@ import {
   Switch,
 } from "@/components/ui";
 
+import { AlbumMediaWorkspace } from "./album-media-workspace";
 import { formatCount, formatDay } from "./format";
 import { ShareRevokeDialog } from "./share-revoke-dialog";
 import { extractDriveFolderId } from "./drive-folder";
@@ -45,6 +47,7 @@ import { extractDriveFolderId } from "./drive-folder";
 export interface AlbumDetailViewProps {
   detail: AlbumDetail;
   shares: ShareSummary[];
+  initialPhotos: Photo[];
   /** Server timestamp so relative dates match between SSR and hydration. */
   now: number;
 }
@@ -55,7 +58,7 @@ const MODE_LABELS: Record<ShareMode, string> = {
   magic_link: "Magic link",
 };
 
-export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
+export function AlbumDetailView({ detail, shares, initialPhotos, now }: AlbumDetailViewProps) {
   const router = useRouter();
   const { album, folders, progress } = detail;
 
@@ -615,6 +618,15 @@ export function AlbumDetailView({ detail, shares, now }: AlbumDetailViewProps) {
           />
         )}
       </Fieldset>
+
+      <AlbumMediaWorkspace
+        albumId={album.id}
+        albumStatus={album.status}
+        initialCoverPhotoId={album.coverPhotoId}
+        initialPhotos={initialPhotos}
+        missingCount={progress.missing}
+        onFeedback={setFeedback}
+      />
 
       <Fieldset
         legend="Danger Zone"

@@ -1,5 +1,10 @@
+"use client";
+
+import { useState } from "react";
+
 import type { AlbumStatus, AlbumSummary } from "@/contracts/album";
 
+import { adminPhotoThumbUrl } from "./album-media";
 import { formatCount } from "./format";
 
 export const ALBUM_STATUS_LABEL: Record<AlbumStatus, string> = {
@@ -22,7 +27,34 @@ export function AlbumStatusPill({ status }: { status: AlbumStatus }) {
   );
 }
 
-export function AlbumCoverMark({ title }: { title: string }) {
+export function AlbumCoverMark({
+  albumId,
+  coverPhotoId,
+  title,
+}: {
+  albumId?: string;
+  coverPhotoId?: string | null;
+  title: string;
+}) {
+  const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
+  const showCover = Boolean(albumId && coverPhotoId && failedCoverId !== coverPhotoId);
+
+  if (showCover && albumId && coverPhotoId) {
+    return (
+      <span className="admin-cover-mark is-image" aria-hidden="true">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={adminPhotoThumbUrl(albumId, coverPhotoId, 400)}
+          alt=""
+          className="admin-cover-img"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedCoverId(coverPhotoId)}
+        />
+      </span>
+    );
+  }
+
   return (
     <span className="admin-cover-mark" aria-hidden="true">
       {title.trim().charAt(0).toUpperCase() || "A"}
