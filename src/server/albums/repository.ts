@@ -76,6 +76,10 @@ export interface AlbumRepository {
   setCoverPhoto(albumId: string, photoId: string | null): Promise<void>;
   /** Returns the photo only when it belongs to the album and is not tombstoned. */
   findAlbumPhoto(albumId: string, photoId: string): Promise<{ id: string } | null>;
+  findAlbumPhotoMedia(
+    albumId: string,
+    photoId: string,
+  ): Promise<{ id: string; driveFileId: string; name: string } | null>;
   markFoldersIndexed(folderIds: string[], at: Date): Promise<void>;
   upsertPhotos(albumId: string, rows: IndexedPhoto[]): Promise<void>;
   markMissingPhotos(albumId: string, seenDriveFileIds: string[]): Promise<number>;
@@ -494,6 +498,26 @@ export function createDrizzleAlbumRepository(db: Database): AlbumRepository {
     async findAlbumPhoto(albumId, photoId) {
       const [row] = await db
         .select({ id: photos.id })
+        .from(photos)
+        .where(
+          and(
+            eq(photos.id, photoId),
+            eq(photos.albumId, albumId),
+            isNull(photos.missingAt),
+          ),
+        )
+        .limit(1);
+
+      return row ?? null;
+    },
+
+    async findAlbumPhotoMedia(albumId, photoId) {
+      const [row] = await db
+        .select({
+          id: photos.id,
+          driveFileId: photos.driveFileId,
+          name: photos.name,
+        })
         .from(photos)
         .where(
           and(
