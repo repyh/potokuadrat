@@ -512,7 +512,7 @@ export function NewShareForm({
                 label: "Frozen subset",
                 disabled: true,
                 description:
-                  "Selecting individual photos requires the album media workspace (upcoming).",
+                  "Selecting individual photos is not available yet; this share includes the whole album and follows re-indexing.",
               },
             ]}
           />
@@ -591,11 +591,11 @@ export function NewShareForm({
 
         <Fieldset
           legend="5 · Metadata policy"
-          description="Control whether downloaded files keep camera EXIF and GPS coordinates."
+          description="Control whether thumbnails and Web 2048 copies keep camera EXIF and GPS. Original downloads always keep the file's metadata and are never rewritten."
         >
           <RadioGroup
             name="share-metadata-policy"
-            legend="EXIF & GPS handling"
+            legend="Thumbnail & web copy metadata"
             value={metadataPolicy}
             disabled={submitting}
             onChange={(value) => setMetadataPolicy(value as MetadataPolicyChoice)}
@@ -605,26 +605,29 @@ export function NewShareForm({
                 label: "Inherit organization policy",
                 description: `Currently ${
                   orgDefaults.stripMetadata
-                    ? "strips EXIF & GPS metadata"
-                    : "keeps EXIF & GPS metadata"
+                    ? "strips EXIF & GPS from thumbnails and web copies"
+                    : "keeps EXIF & GPS in thumbnails and web copies"
                 }.`,
               },
               {
                 value: "strip",
-                label: "Strip EXIF & GPS metadata",
-                description: "Re-encodes downloaded copies without camera or location tags.",
+                label: "Strip EXIF & GPS",
+                description:
+                  "Removes EXIF, XMP, IPTC, and GPS from thumbnails and Web 2048 copies.",
               },
               {
                 value: "keep",
-                label: "Keep original EXIF & GPS metadata",
-                description: "Delivers untouched metadata inside downloaded files.",
+                label: "Keep EXIF & GPS",
+                description: "Sends thumbnail and web-copy metadata as-is.",
               },
             ]}
           />
 
           {showMetadataWarning && (
-            <Alert tone="warning" title="Location and camera EXIF metadata will be exposed">
-              Downloaded photos on this share will retain original GPS coordinates and camera EXIF tags.
+            <Alert tone="warning" title="Location and camera metadata will be exposed">
+              Thumbnails and Web 2048 copies on this share will retain original GPS
+              coordinates and camera EXIF. Original downloads are never rewritten, so they
+              always keep their metadata.
             </Alert>
           )}
         </Fieldset>
