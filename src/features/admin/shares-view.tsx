@@ -207,10 +207,15 @@ export function SharesView({ page, state, now }: SharesViewProps) {
           rows={page.shares.map((share) => ({
             id: share.id,
             album: (
-              <span className="admin-table-primary">
-                <strong>{share.albumTitle}</strong>
-                <span className="admin-table-sub">/s/{share.slug}</span>
-              </span>
+              <Link
+                href={`/admin/shares/${encodeURIComponent(share.id)}`}
+                className="admin-table-title"
+              >
+                <span className="admin-table-primary">
+                  <strong>{share.albumTitle}</strong>
+                  <span className="admin-table-sub">/s/{share.slug}</span>
+                </span>
+              </Link>
             ),
             mode: MODE_LABEL[share.mode],
             expires: (
@@ -222,6 +227,12 @@ export function SharesView({ page, state, now }: SharesViewProps) {
             visits: <span className="tabular-nums">{formatCount(share.visits)}</span>,
             actions: (
               <div className="admin-table-actions">
+                <Link
+                  href={`/admin/shares/${encodeURIComponent(share.id)}`}
+                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                >
+                  <span className="ui-btn-label">Manage</span>
+                </Link>
                 <button
                   type="button"
                   className="ui-btn ui-btn-ghost ui-btn-sm"
