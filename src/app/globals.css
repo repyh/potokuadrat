@@ -3242,7 +3242,8 @@ select {
   cursor: grabbing;
 }
 
-.admin-media-card.is-cover {
+.admin-media-card.is-cover,
+.admin-media-card.is-selected {
   border-color: var(--ink);
   box-shadow: inset 0 2px 0 var(--accent);
 }
@@ -3275,6 +3276,17 @@ select {
   border: 0;
   background: transparent;
   cursor: zoom-in;
+}
+
+.admin-media-select-btn {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .admin-media-img {

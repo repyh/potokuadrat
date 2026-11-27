@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import type { Photo } from "@/contracts/album";
+
 import {
+  countAlbumPhotosByFilter,
+  filterAlbumPhotos,
   parseRecipients,
   validateAndBuildShareInput,
   type ShareComposerDraft,
@@ -17,6 +21,8 @@ function baseDraft(overrides: Partial<ShareComposerDraft> = {}): ShareComposerDr
     allowDownload: true,
     allowOriginal: true,
     allowWeb: true,
+    photoScope: "whole",
+    selectedPhotoIds: [],
     metadataPolicy: "inherit",
     brandingTitle: "",
     brandingLogo: "",
@@ -153,5 +159,87 @@ describe("validateAndBuildShareInput", () => {
     if (valid.ok) {
       expect(valid.input.recipients).toEqual(["guest@example.com", "second@example.com"]);
     }
+  });
+
+  it("requires at least one photo for a frozen subset and deduplicates selected ids", () => {
+    const empty = validateAndBuildShareInput(
+      baseDraft({ photoScope: "frozen", selectedPhotoIds: [] }),
+    );
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) {
+      expect(empty.errors.photoIds).toBeDefined();
+    }
+
+    const p1 = "22222222-2222-4222-8222-222222222221";
+    const p2 = "22222222-2222-4222-8222-222222222222";
+    const frozen = validateAndBuildShareInput(
+      baseDraft({ photoScope: "frozen", selectedPhotoIds: [p1, p2, p1] }),
+    );
+    expect(frozen.ok).toBe(true);
+    if (frozen.ok) {
+      expect(frozen.input.photoIds).toEqual([p1, p2]);
+    }
+
+    const whole = validateAndBuildShareInput(
+      baseDraft({ photoScope: "whole", selectedPhotoIds: [p1] }),
+    );
+    expect(whole.ok).toBe(true);
+    if (whole.ok) {
+      expect(whole.input.photoIds).toBeNull();
+    }
+  });
+});
+
+function samplePhoto(overrides: Partial<Photo> = {}): Photo {
+  return {
+    id: "p-1",
+    name: "DSC_0001.jpg",
+    width: 1600,
+    height: 1067,
+    bytes: 2_000_000,
+    orientation: "landscape",
+    thumbStatus: "ready",
+    takenAt: "2026-10-01T10:00:00.000Z",
+    sortIndex: 0,
+    ...overrides,
+  };
+}
+
+describe("countAlbumPhotosByFilter & filterAlbumPhotos", () => {
+  const photos: Photo[] = [
+    samplePhoto({ id: "p1", name: "Ceremony_01.jpg", orientation: "landscape", thumbStatus: "ready" }),
+    samplePhoto({ id: "p2", name: "Portrait_02.jpg", orientation: "portrait", thumbStatus: "ready" }),
+    samplePhoto({ id: "p3", name: "Ceremony_03.jpg", orientation: "portrait", thumbStatus: "pending" }),
+    samplePhoto({ id: "p4", name: "Reception_04.jpg", orientation: "landscape", thumbStatus: "failed" }),
+  ];
+
+  it("counts orientations and thumbnail statuses including broken runtime thumbnails", () => {
+    expect(countAlbumPhotosByFilter(photos, { p2: true })).toEqual({
+      all: 4,
+      landscape: 2,
+      portrait: 2,
+      ready: 1,
+      pending: 1,
+      failed: 2,
+    });
+  });
+
+  it("filters by query, orientation, and thumbnail status", () => {
+    expect(
+      filterAlbumPhotos(photos, {
+        query: "ceremony",
+        orientation: "portrait",
+        statusFilter: "pending",
+      }).map((p) => p.id),
+    ).toEqual(["p3"]);
+
+    expect(
+      filterAlbumPhotos(photos, {
+        query: "",
+        orientation: "all",
+        statusFilter: "failed",
+        brokenThumbIds: { p2: true },
+      }).map((p) => p.id),
+    ).toEqual(["p2", "p4"]);
   });
 });
