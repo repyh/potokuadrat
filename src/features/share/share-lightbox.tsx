@@ -171,7 +171,10 @@ export function ShareLightbox({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/s/${encodeURIComponent(slug)}/thumb/${encodeURIComponent(photo.id)}?w=1600`}
+            srcSet={`/s/${encodeURIComponent(slug)}/thumb/${encodeURIComponent(photo.id)}?w=800 800w, /s/${encodeURIComponent(slug)}/thumb/${encodeURIComponent(photo.id)}?w=1600 1600w`}
+            sizes="100vw"
             alt={photo.name}
+            decoding="async"
             className="share-lightbox-img"
           />
 
