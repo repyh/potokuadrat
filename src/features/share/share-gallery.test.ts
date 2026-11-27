@@ -4,6 +4,7 @@ import { PHOTO_FILTERS, PHOTO_SORTS } from "@/contracts/album";
 import {
   FILTER_LABELS,
   SORT_LABELS,
+  buildShareThumbSrcSet,
   formatExpiry,
   formatShareBytes,
   resolvePreferredQuality,
@@ -66,6 +67,17 @@ describe("resolvePreferredQuality", () => {
 
   it("returns 'web' as the fallback when the list is empty", () => {
     expect(resolvePreferredQuality([])).toBe("web");
+  });
+});
+
+describe("buildShareThumbSrcSet", () => {
+  it("builds encoded responsive thumbnail srcSet widths", () => {
+    expect(buildShareThumbSrcSet("album/one", "photo 2")).toBe(
+      "/s/album%2Fone/thumb/photo%202?w=400 400w, /s/album%2Fone/thumb/photo%202?w=800 800w",
+    );
+    expect(buildShareThumbSrcSet("slug", "id", [800, 1600])).toBe(
+      "/s/slug/thumb/id?w=800 800w, /s/slug/thumb/id?w=1600 1600w",
+    );
   });
 });
 
