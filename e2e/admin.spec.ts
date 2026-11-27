@@ -30,6 +30,7 @@ test.describe("dashboard", () => {
     for (const [label, url] of [
       ["Albums", "/admin/albums"],
       ["Shares", "/admin/shares"],
+      ["Drive", "/admin/drive"],
       ["Settings", "/admin/settings"],
     ] as const) {
       await nav.getByRole("link", { name: label }).click();
