@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import type { DriveStatus, OrganizationSettings } from "@/contracts/admin";
+import { ACCENT_PRESETS } from "@/contracts/branding";
 import {
   getDriveStatusAction,
   updateOrganizationSettingsAction,
 } from "@/app/admin/settings/actions";
+import { BrandMark } from "@/components/brand-mark";
 import { Alert, Button, EmptyState, Field, Input, Switch, Tabs } from "@/components/ui";
 
 export interface SettingsFormProps {
@@ -35,6 +37,8 @@ export function SettingsForm({
   const [stripMetadata, setStripMetadata] = useState(initialSettings.stripMetadata);
   const [footerEnabled, setFooterEnabled] = useState(initialSettings.footerEnabled);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [accountName, setAccountName] = useState(currentUser.name);
   const [savingAccount, setSavingAccount] = useState(false);
@@ -87,6 +91,54 @@ export function SettingsForm({
       message: "Organization branding and delivery defaults are updated.",
     });
     router.refresh();
+  };
+
+  const handleUploadLogo = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || uploadingLogo) {
+      return;
+    }
+
+    const form = new FormData();
+    form.append("file", file);
+
+    setUploadingLogo(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/admin/branding/logo", {
+        method: "POST",
+        body: form,
+      });
+      const body = (await res.json().catch(() => null)) as {
+        url?: string;
+        error?: string;
+      } | null;
+
+      if (!res.ok || !body?.url) {
+        setFeedback({
+          tone: "danger",
+          title: "Logo upload failed",
+          message: body?.error ?? "Unable to upload logo image.",
+        });
+        return;
+      }
+
+      setLogo(body.url);
+      setFeedback({
+        tone: "success",
+        title: "Logo uploaded",
+        message: "Save settings to apply this logo across public shares.",
+      });
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Logo upload failed",
+        message: "Network error while uploading logo.",
+      });
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const handleSaveAccountName = async () => {
@@ -305,30 +357,85 @@ export function SettingsForm({
                       htmlFor="org-accent"
                       label="Accent color"
                       optionalLabel="Optional"
-                      hint="Hex color used for primary actions (e.g. #d9ef63)."
+                      hint="Hex color used for primary actions and active highlights."
                     >
-                      <Input
-                        id="org-accent"
-                        value={accent}
-                        onChange={(e) => setAccent(e.target.value)}
-                        disabled={saving}
-                        placeholder="#d9ef63"
-                      />
+                      <div className="admin-dialog-stack">
+                        <div className="admin-input-row">
+                          <Input
+                            id="org-accent"
+                            value={accent}
+                            onChange={(e) => setAccent(e.target.value)}
+                            disabled={saving}
+                            placeholder="#d9ef63"
+                          />
+                          <span
+                            className="brand-accent-preview"
+                            style={{ backgroundColor: accent.trim() || "#d9ef63" }}
+                            aria-hidden="true"
+                          />
+                        </div>
+
+                        <div className="brand-accent-presets" role="group" aria-label="Accent presets">
+                          {ACCENT_PRESETS.map((preset) => (
+                            <button
+                              key={preset.hex}
+                              type="button"
+                              className={`brand-accent-swatch ${
+                                accent.trim().toLowerCase() === preset.hex ? "is-active" : ""
+                              }`.trim()}
+                              onClick={() => setAccent(preset.hex)}
+                              disabled={saving}
+                              title={`${preset.label} (${preset.hex})`}
+                            >
+                              <span
+                                className="brand-accent-dot"
+                                style={{ backgroundColor: preset.hex }}
+                                aria-hidden="true"
+                              />
+                              <span>{preset.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </Field>
 
                     <Field
                       htmlFor="org-logo"
-                      label="Logo URL"
+                      label="Logo image"
                       optionalLabel="Optional"
-                      hint="Square mark or studio wordmark URL."
+                      hint="Upload a PNG/JPEG/WebP file (up to 2 MB) or enter a URL."
                     >
-                      <Input
-                        id="org-logo"
-                        value={logo}
-                        onChange={(e) => setLogo(e.target.value)}
-                        disabled={saving}
-                        placeholder="https://example.com/logo.png"
-                      />
+                      <div className="admin-dialog-stack">
+                        <div className="brand-preview-row">
+                          <BrandMark title={title.trim() || name.trim() || "Potokuadrat"} logo={logo} />
+                          <div className="admin-input-row" style={{ flex: "1 1 200px" }}>
+                            <Input
+                              id="org-logo"
+                              value={logo}
+                              onChange={(e) => setLogo(e.target.value)}
+                              disabled={saving || uploadingLogo}
+                              placeholder="https://example.com/logo.png"
+                            />
+                            <input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={(e) => void handleUploadLogo(e)}
+                              hidden
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="md"
+                              loading={uploadingLogo}
+                              disabled={saving}
+                              onClick={() => logoInputRef.current?.click()}
+                            >
+                              Upload
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </Field>
                   </div>
 

@@ -50,6 +50,7 @@ forces a rebuild.
 | `DRIVE_INDEX_MAX_DEPTH` | Recursion depth while listing folders (default 5) |
 | `THUMB_CACHE_DIR` | Thumbnail cache directory |
 | `THUMB_CACHE_MAX_BYTES` / `THUMB_CACHE_MAX_FILES` | Cache cap and LRU eviction |
+| `BRANDING_DIR` | Uploaded logo directory (Docker uses the `branding` volume) |
 | `STRIP_METADATA` | `1` (default) strips EXIF/IPTC/comments from thumbnails |
 | `SMTP_*` | Optional SMTP for magic links; without it links are copied manually |
 | `ANALYTICS_RETENTION_MONTHS` | Retention for first-party analytics (default 12) |
@@ -64,10 +65,29 @@ forces a rebuild.
 | `npm run typecheck` | TypeScript without emit |
 | `npm test` | Vitest unit tests |
 | `npm run test:integration` | Auth and setup tests against `TEST_DATABASE_URL` |
+| `npm run test:e2e` | Playwright journeys against a seeded database |
+| `npm run test:e2e:ui` | Playwright UI mode for debugging |
 | `npm run db:generate` | Generate SQL migrations from the Drizzle schema |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Create the sample organization, admin, album, and shares |
 | `npm run db:studio` | Inspect the database |
+
+### End-to-end tests
+
+The Playwright suite signs in as the seeded admin and walks the guest and organizer
+journeys against a real Postgres and a production build.
+
+```bash
+npx playwright install chromium
+npm run db:migrate
+npm run db:seed
+npm run test:e2e
+```
+
+The config loads `.env.local` (then `.env`) and starts the standalone build on port
+3100, or uses `E2E_BASE_URL` when set. Seeded thumbnails are disabled in production
+builds, so bitmap and ZIP assertions run only with `E2E_SEED_MEDIA=1` against a dev
+server. Reports land in `playwright-report/` and test results in `test-results/`.
 
 ## Share media API
 

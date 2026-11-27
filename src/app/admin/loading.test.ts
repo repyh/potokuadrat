@@ -9,6 +9,8 @@ import DriveLoading from "./drive/loading";
 import AdminLoading from "./loading";
 import SettingsLoading from "./settings/loading";
 import SharesLoading from "./shares/loading";
+import ShareDetailLoading from "./shares/[id]/loading";
+import NewShareLoading from "./shares/new/loading";
 
 function render(component: ComponentType): string {
   return renderToStaticMarkup(createElement(component));
@@ -40,9 +42,10 @@ describe("admin loading boundaries", () => {
     expect(shares).not.toContain("admin-metrics");
   });
 
-  it("mirrors the settings tabs and the new album fieldsets", () => {
+  it("mirrors the settings tabs and the new album and share fieldsets", () => {
     const settings = render(SettingsLoading);
     const newAlbum = render(NewAlbumLoading);
+    const newShare = render(NewShareLoading);
 
     expect(settings).toContain('aria-label="Loading settings"');
     expect(settings).toContain("ui-tablist");
@@ -51,17 +54,26 @@ describe("admin loading boundaries", () => {
     expect(newAlbum).toContain('aria-label="Loading new album"');
     expect(newAlbum).toContain("admin-cover-placeholder");
     expect(newAlbum).toContain("ui-fieldset");
+
+    expect(newShare).toContain('aria-label="Loading new share"');
+    expect(newShare).toContain("ui-fieldset");
   });
 
-  it("mirrors the album detail and drive breadcrumbs, fieldsets, and tables", () => {
-    const markup = render(AlbumDetailLoading);
+  it("mirrors the album, share, and drive breadcrumbs, fieldsets, and tables", () => {
+    const album = render(AlbumDetailLoading);
+    const share = render(ShareDetailLoading);
     const drive = render(DriveLoading);
 
-    expect(markup).toContain('aria-label="Loading album detail"');
-    expect(markup).toContain("ui-breadcrumbs");
-    expect(markup).toContain("ui-fieldset");
-    expect(markup).toContain("Access");
-    expect(markup).not.toContain("admin-metrics");
+    expect(album).toContain('aria-label="Loading album detail"');
+    expect(album).toContain("ui-breadcrumbs");
+    expect(album).toContain("ui-fieldset");
+    expect(album).toContain("Access");
+    expect(album).not.toContain("admin-metrics");
+
+    expect(share).toContain('aria-label="Loading share detail"');
+    expect(share).toContain("ui-breadcrumbs");
+    expect(share).toContain("ui-fieldset");
+    expect(share).toContain("admin-metrics");
 
     expect(drive).toContain('aria-label="Loading drive"');
     expect(drive).toContain("ui-fieldset");

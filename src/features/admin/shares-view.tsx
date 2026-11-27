@@ -97,9 +97,14 @@ export function SharesView({ page, state, now }: SharesViewProps) {
           </div>
           <p className="auth-lede">Every share link across your albums.</p>
         </div>
-        <Link href="/admin/albums" className="ui-btn ui-btn-secondary ui-btn-md">
-          <span className="ui-btn-label">Open an album</span>
-        </Link>
+        <div className="specimen-inline-cluster">
+          <Link href="/admin/albums" className="ui-btn ui-btn-secondary ui-btn-md">
+            <span className="ui-btn-label">Open an album</span>
+          </Link>
+          <Link href="/admin/shares/new" className="ui-btn ui-btn-primary ui-btn-md">
+            <span className="ui-btn-label">New share</span>
+          </Link>
+        </div>
       </header>
 
       {feedback && (
@@ -185,10 +190,10 @@ export function SharesView({ page, state, now }: SharesViewProps) {
         ) : (
           <EmptyState
             title="No shares yet"
-            description="Shares are the access unit; create one from any album."
+            description="Shares are the access unit; create one for any album."
             action={
-              <Link href="/admin/albums" className="ui-btn ui-btn-primary ui-btn-sm">
-                <span className="ui-btn-label">Open albums</span>
+              <Link href="/admin/shares/new" className="ui-btn ui-btn-primary ui-btn-sm">
+                <span className="ui-btn-label">New share</span>
               </Link>
             }
           />
@@ -207,10 +212,15 @@ export function SharesView({ page, state, now }: SharesViewProps) {
           rows={page.shares.map((share) => ({
             id: share.id,
             album: (
-              <span className="admin-table-primary">
-                <strong>{share.albumTitle}</strong>
-                <span className="admin-table-sub">/s/{share.slug}</span>
-              </span>
+              <Link
+                href={`/admin/shares/${encodeURIComponent(share.id)}`}
+                className="admin-table-title"
+              >
+                <span className="admin-table-primary">
+                  <strong>{share.albumTitle}</strong>
+                  <span className="admin-table-sub">/s/{share.slug}</span>
+                </span>
+              </Link>
             ),
             mode: MODE_LABEL[share.mode],
             expires: (
@@ -222,6 +232,12 @@ export function SharesView({ page, state, now }: SharesViewProps) {
             visits: <span className="tabular-nums">{formatCount(share.visits)}</span>,
             actions: (
               <div className="admin-table-actions">
+                <Link
+                  href={`/admin/shares/${encodeURIComponent(share.id)}`}
+                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                >
+                  <span className="ui-btn-label">Manage</span>
+                </Link>
                 <button
                   type="button"
                   className="ui-btn ui-btn-ghost ui-btn-sm"

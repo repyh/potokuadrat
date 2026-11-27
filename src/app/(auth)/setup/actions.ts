@@ -14,6 +14,8 @@ export interface SetupState {
     name?: string;
     email?: string;
     organizationName?: string;
+    accent?: string;
+    logo?: string;
   };
 }
 
@@ -29,12 +31,25 @@ const setupSchema = z.object({
     .trim()
     .min(2, "Enter an organization name.")
     .max(120, "Keep the organization name under 120 characters."),
+  accent: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex accent color.")
+    .optional(),
+  logo: z
+    .string()
+    .trim()
+    .max(2000, "Keep the logo URL under 2000 characters.")
+    .optional(),
 });
 
 export async function setupAction(
   _state: SetupState,
   formData: FormData,
 ): Promise<SetupState> {
+  const accentRaw = typeof formData.get("accent") === "string" ? String(formData.get("accent")).trim() : "";
+  const logoRaw = typeof formData.get("logo") === "string" ? String(formData.get("logo")).trim() : "";
+
   const rawFields = {
     name: typeof formData.get("name") === "string" ? String(formData.get("name")).trim() : "",
     email: typeof formData.get("email") === "string" ? String(formData.get("email")).trim() : "",
@@ -42,10 +57,14 @@ export async function setupAction(
       typeof formData.get("organizationName") === "string"
         ? String(formData.get("organizationName")).trim()
         : "",
+    accent: accentRaw,
+    logo: logoRaw,
   };
 
   const parsed = setupSchema.safeParse({
     ...rawFields,
+    accent: accentRaw || undefined,
+    logo: logoRaw || undefined,
     password: formData.get("password"),
   });
 
@@ -74,6 +93,8 @@ export async function setupAction(
       .values({
         name: parsed.data.organizationName,
         title: parsed.data.organizationName,
+        accent: parsed.data.accent ?? null,
+        logo: parsed.data.logo ?? null,
       })
       .returning({ id: organizations.id });
     organizationId = created.id;

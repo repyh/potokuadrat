@@ -39,6 +39,7 @@ yarn-error.log*
 
 # local runtime data
 /.cache
+/.data
 /secrets/
 
 # vercel
@@ -47,3 +48,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.e2e/
+playwright-report/
+test-results/
+e2e/screenshots/
