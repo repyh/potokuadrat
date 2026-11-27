@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -37,6 +37,7 @@ import {
 import { BrandMark } from "@/components/brand-mark";
 
 import { formatCount, formatDay, formatRelative } from "./format";
+import { SharePhotoPicker } from "./share-photo-picker";
 import { ShareRevokeDialog } from "./share-revoke-dialog";
 
 export interface ShareDetailViewProps {
@@ -63,7 +64,6 @@ const MODE_LABELS: Record<ShareMode, string> = {
 };
 
 type MetadataChoice = "inherit" | "strip" | "keep";
-const SUBSET_INITIAL_COUNT = 12;
 
 function toDateInputValue(iso: string | null, fallbackDate: string): string {
   if (!iso) {
@@ -120,8 +120,6 @@ export function ShareDetailView({
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>(
     () => initialShare.photoIds ?? [],
   );
-  const [subsetQuery, setSubsetQuery] = useState("");
-  const [subsetVisibleCount, setSubsetVisibleCount] = useState(SUBSET_INITIAL_COUNT);
   const [savingSubset, setSavingSubset] = useState(false);
 
   const [brandingTitle, setBrandingTitle] = useState(initialShare.branding?.title ?? "");
@@ -149,21 +147,6 @@ export function ShareDetailView({
 
   const sharePath = `/s/${share.slug}`;
   const isExpired = share.expiresAt ? new Date(share.expiresAt).getTime() <= now : false;
-
-  const filteredPhotos = useMemo(() => {
-    const needle = subsetQuery.trim().toLowerCase();
-    if (!needle) {
-      return albumPhotos;
-    }
-    return albumPhotos.filter((photo) => photo.name.toLowerCase().includes(needle));
-  }, [albumPhotos, subsetQuery]);
-
-  const displayedSubsetPhotos = useMemo(
-    () => filteredPhotos.slice(0, subsetVisibleCount),
-    [filteredPhotos, subsetVisibleCount],
-  );
-
-  const selectedSet = useMemo(() => new Set(selectedPhotoIds), [selectedPhotoIds]);
 
   const showMetadataWarning =
     metadataPolicy === "keep" || (metadataPolicy === "inherit" && !orgDefaults.stripMetadata);
@@ -335,15 +318,6 @@ export function ShareDetailView({
       recipients: prev.recipients.filter((r) => r.id !== recipientId),
     }));
     router.refresh();
-  };
-
-  const handleTogglePhoto = (photoId: string, checked: boolean) => {
-    setSelectedPhotoIds((prev) => {
-      if (checked) {
-        return prev.includes(photoId) ? prev : [...prev, photoId];
-      }
-      return prev.filter((id) => id !== photoId);
-    });
   };
 
   const handleSaveSubset = async (event: FormEvent<HTMLFormElement>) => {
@@ -769,101 +743,13 @@ export function ShareDetailView({
           />
 
           {subsetChoice === "frozen" && (
-            <div className="admin-dialog-stack">
-              {albumPhotos.length === 0 ? (
-                <EmptyState
-                  title="No indexed photos in album"
-                  description="Re-index the album before freezing a subset."
-                />
-              ) : (
-                <>
-                  <div className="admin-toolbar">
-                    <Input
-                      type="search"
-                      className="admin-search"
-                      aria-label="Filter album photos"
-                      placeholder="Filter photos by filename…"
-                      value={subsetQuery}
-                      onChange={(event) => {
-                        setSubsetQuery(event.target.value);
-                        setSubsetVisibleCount(SUBSET_INITIAL_COUNT);
-                      }}
-                    />
-                    <div className="specimen-inline-cluster">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={savingSubset}
-                        onClick={() => setSelectedPhotoIds(albumPhotos.map((p) => p.id))}
-                      >
-                        Select all
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={savingSubset}
-                        onClick={() => setSelectedPhotoIds([])}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="admin-folder-list">
-                    {displayedSubsetPhotos.map((photo) => (
-                      <div key={photo.id} className="admin-folder-row">
-                        <Checkbox
-                          id={`subset-photo-${photo.id}`}
-                          checked={selectedSet.has(photo.id)}
-                          disabled={savingSubset}
-                          onChange={(event) =>
-                            handleTogglePhoto(photo.id, event.target.checked)
-                          }
-                          label={photo.name}
-                          description={
-                            photo.width && photo.height
-                              ? `${photo.width} × ${photo.height}`
-                              : undefined
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {filteredPhotos.length > SUBSET_INITIAL_COUNT && (
-                    <div className="admin-pager">
-                      <span className="admin-pager-count tabular-nums">
-                        Showing {displayedSubsetPhotos.length} of {filteredPhotos.length}
-                      </span>
-                      <div className="specimen-inline-cluster">
-                        {displayedSubsetPhotos.length < filteredPhotos.length && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() =>
-                              setSubsetVisibleCount((prev) =>
-                                Math.min(filteredPhotos.length, prev + 24),
-                              )
-                            }
-                          >
-                            Show more
-                          </Button>
-                        )}
-                        {subsetVisibleCount > SUBSET_INITIAL_COUNT && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSubsetVisibleCount(SUBSET_INITIAL_COUNT)}
-                          >
-                            Show fewer
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <SharePhotoPicker
+              albumId={share.albumId}
+              photos={albumPhotos}
+              selectedPhotoIds={selectedPhotoIds}
+              onChangeSelected={setSelectedPhotoIds}
+              disabled={savingSubset}
+            />
           )}
 
           <div>

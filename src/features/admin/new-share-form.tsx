@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import type { Photo } from "@/contracts/album";
 import type { CreateShareResponse, ShareMode } from "@/contracts/share";
+import { listAlbumPhotosAction } from "@/app/admin/albums/actions";
 import { createShareAction } from "@/app/admin/shares/actions";
 import {
   Alert,
@@ -26,8 +28,10 @@ import {
   validateAndBuildShareInput,
   type ExpiryChoice,
   type MetadataPolicyChoice,
+  type PhotoSubsetChoice,
   type ShareComposerErrors,
 } from "./share-composer";
+import { SharePhotoPicker } from "./share-photo-picker";
 
 export interface ShareComposerAlbumOption {
   id: string;
@@ -69,6 +73,18 @@ export function NewShareForm({
   const [allowDownload, setAllowDownload] = useState(true);
   const [allowOriginal, setAllowOriginal] = useState(true);
   const [allowWeb, setAllowWeb] = useState(true);
+  const [photoScope, setPhotoScope] = useState<PhotoSubsetChoice>("whole");
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [albumPhotosState, setAlbumPhotosState] = useState<{
+    albumId: string | null;
+    photos: Photo[];
+    error: string | null;
+  }>({
+    albumId: null,
+    photos: [],
+    error: null,
+  });
+  const [photosReloadTick, setPhotosReloadTick] = useState(0);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicyChoice>("inherit");
   const [brandingTitle, setBrandingTitle] = useState("");
   const [brandingLogo, setBrandingLogo] = useState("");
@@ -80,6 +96,33 @@ export function NewShareForm({
   const [submitting, setSubmitting] = useState(false);
   const [createdResult, setCreatedResult] = useState<CreateShareResponse | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!albumId) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const result = await listAlbumPhotosAction(albumId);
+      if (cancelled) {
+        return;
+      }
+      if (!result.ok) {
+        setAlbumPhotosState({ albumId, photos: [], error: result.error });
+        return;
+      }
+      setAlbumPhotosState({ albumId, photos: result.data.photos, error: null });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [albumId, photosReloadTick]);
+
+  const photosLoading = Boolean(albumId) && albumPhotosState.albumId !== albumId;
+  const albumPhotos = albumPhotosState.albumId === albumId ? albumPhotosState.photos : [];
+  const photosError = albumPhotosState.albumId === albumId ? albumPhotosState.error : null;
 
   if (albums.length === 0) {
     return (
@@ -143,6 +186,8 @@ export function NewShareForm({
       allowDownload,
       allowOriginal,
       allowWeb,
+      photoScope,
+      selectedPhotoIds,
       metadataPolicy,
       brandingTitle,
       brandingLogo,
@@ -168,13 +213,7 @@ export function NewShareForm({
       return;
     }
 
-    if (result.data.links.length > 0) {
-      setCreatedResult(result.data);
-      router.refresh();
-      return;
-    }
-
-    router.push(`/admin/albums/${encodeURIComponent(validated.albumId)}`);
+    setCreatedResult(result.data);
     router.refresh();
   };
 
@@ -182,6 +221,13 @@ export function NewShareForm({
     const sharePath = `/s/${createdResult.share.slug}`;
     const shareUrl =
       typeof window === "undefined" ? sharePath : `${window.location.origin}${sharePath}`;
+    const hasMagicLinks = createdResult.links.length > 0;
+    const subsetLabel =
+      createdResult.share.photoCount !== null
+        ? `Frozen subset (${createdResult.share.photoCount} ${
+            createdResult.share.photoCount === 1 ? "photo" : "photos"
+          })`
+        : "Whole album (follows re-indexing)";
 
     return (
       <section className="admin-page" aria-labelledby="new-share-heading">
@@ -198,19 +244,29 @@ export function NewShareForm({
 
         <header className="admin-page-header">
           <div>
-            <h1 id="new-share-heading">Magic links issued</h1>
+            <h1 id="new-share-heading">
+              {hasMagicLinks ? "Magic links issued" : "Share created"}
+            </h1>
             <p className="auth-lede">
-              Copy and send these one-time links now. Raw tokens cannot be viewed again after leaving this page.
+              {hasMagicLinks
+                ? "Copy and send these one-time links now. Raw tokens cannot be viewed again after leaving this page."
+                : "The gallery link is ready. You can adjust its settings or photo subset at any time."}
             </p>
           </div>
           <div className="specimen-inline-cluster">
             <Link
-              href={`/admin/albums/${encodeURIComponent(createdResult.share.albumId)}`}
+              href={`/admin/shares/${encodeURIComponent(createdResult.share.id)}`}
               className="ui-btn ui-btn-primary ui-btn-md"
+            >
+              <span className="ui-btn-label">Manage share</span>
+            </Link>
+            <Link
+              href={`/admin/albums/${encodeURIComponent(createdResult.share.albumId)}`}
+              className="ui-btn ui-btn-secondary ui-btn-md"
             >
               <span className="ui-btn-label">Back to album</span>
             </Link>
-            <Link href="/admin/shares" className="ui-btn ui-btn-secondary ui-btn-md">
+            <Link href="/admin/shares" className="ui-btn ui-btn-ghost ui-btn-md">
               <span className="ui-btn-label">All shares</span>
             </Link>
           </div>
@@ -235,31 +291,37 @@ export function NewShareForm({
                 {copiedKey === "share-url" ? "Copied" : "Copy link"}
               </Button>
             </div>
+            <div>
+              <span>Included photos: </span>
+              <strong>{subsetLabel}</strong>
+            </div>
           </div>
         </Alert>
 
-        <Fieldset
-          legend="Recipient magic links"
-          description="Each recipient link is valid for a single sign-in exchange."
-        >
-          <div className="admin-folder-list">
-            {createdResult.links.map((link) => (
-              <div key={link.recipientId} className="admin-folder-row">
-                <div className="admin-table-primary">
-                  <strong>{link.email}</strong>
-                  <code className="admin-table-sub">{link.url}</code>
+        {hasMagicLinks && (
+          <Fieldset
+            legend="Recipient magic links"
+            description="Each recipient link is valid for a single sign-in exchange."
+          >
+            <div className="admin-folder-list">
+              {createdResult.links.map((link) => (
+                <div key={link.recipientId} className="admin-folder-row">
+                  <div className="admin-table-primary">
+                    <strong>{link.email}</strong>
+                    <code className="admin-table-sub">{link.url}</code>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleCopy(link.recipientId, link.url)}
+                  >
+                    {copiedKey === link.recipientId ? "Copied" : "Copy link"}
+                  </Button>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void handleCopy(link.recipientId, link.url)}
-                >
-                  {copiedKey === link.recipientId ? "Copied" : "Copy link"}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Fieldset>
+              ))}
+            </div>
+          </Fieldset>
+        )}
       </section>
     );
   }
@@ -321,7 +383,13 @@ export function NewShareForm({
               invalid={Boolean(errors.albumId)}
               onChange={(event) => {
                 setAlbumId(event.target.value);
-                setErrors((prev) => ({ ...prev, albumId: undefined }));
+                setPhotoScope("whole");
+                setSelectedPhotoIds([]);
+                setErrors((prev) => ({
+                  ...prev,
+                  albumId: undefined,
+                  photoIds: undefined,
+                }));
               }}
               options={albums.map((album) => ({
                 value: album.id,
@@ -497,14 +565,17 @@ export function NewShareForm({
 
         <Fieldset
           legend="3 · Photo subset"
-          description="Control whether new photos from Drive appear in this share."
+          description="Follow the entire album or freeze this share to specific indexed photos."
         >
           <RadioGroup
             name="share-subset"
             legend="Included photos"
-            value="whole"
+            value={photoScope}
             disabled={submitting}
-            onChange={() => undefined}
+            onChange={(value) => {
+              setPhotoScope(value as PhotoSubsetChoice);
+              setErrors((prev) => ({ ...prev, photoIds: undefined }));
+            }}
             options={[
               {
                 value: "whole",
@@ -514,12 +585,40 @@ export function NewShareForm({
               {
                 value: "frozen",
                 label: "Frozen subset",
-                disabled: true,
                 description:
-                  "Selecting individual photos is not available yet; this share includes the whole album and follows re-indexing.",
+                  albumPhotos.length > 0
+                    ? `${selectedPhotoIds.length} selected out of ${albumPhotos.length}. New album uploads stay excluded.`
+                    : "Choose individual indexed photos; new album uploads stay excluded.",
               },
             ]}
           />
+
+          {photoScope === "frozen" && (
+            <div className="admin-dialog-stack">
+              {errors.photoIds && (
+                <Alert tone="danger" title="Select photos for frozen subset">
+                  {errors.photoIds}
+                </Alert>
+              )}
+
+              <SharePhotoPicker
+                albumId={albumId}
+                photos={albumPhotos}
+                loading={photosLoading}
+                error={photosError}
+                onRetry={() => {
+                  setAlbumPhotosState({ albumId: null, photos: [], error: null });
+                  setPhotosReloadTick((tick) => tick + 1);
+                }}
+                selectedPhotoIds={selectedPhotoIds}
+                onChangeSelected={(nextIds) => {
+                  setSelectedPhotoIds(nextIds);
+                  setErrors((prev) => ({ ...prev, photoIds: undefined }));
+                }}
+                disabled={submitting}
+              />
+            </div>
+          )}
         </Fieldset>
 
         <Fieldset

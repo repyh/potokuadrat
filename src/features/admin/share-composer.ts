@@ -1,8 +1,12 @@
+import type { Photo } from "@/contracts/album";
 import type { BrandingOverride } from "@/contracts/branding";
 import type { CreateShareInput, DownloadQuality, ShareMode } from "@/contracts/share";
 
 export type MetadataPolicyChoice = "inherit" | "strip" | "keep";
 export type ExpiryChoice = "never" | "date";
+export type PhotoSubsetChoice = "whole" | "frozen";
+export type PhotoOrientationFilter = "all" | "landscape" | "portrait";
+export type PhotoStatusFilter = "all" | "ready" | "pending" | "failed";
 
 export interface ShareComposerDraft {
   albumId: string;
@@ -14,6 +18,8 @@ export interface ShareComposerDraft {
   allowDownload: boolean;
   allowOriginal: boolean;
   allowWeb: boolean;
+  photoScope: PhotoSubsetChoice;
+  selectedPhotoIds: string[];
   metadataPolicy: MetadataPolicyChoice;
   brandingTitle: string;
   brandingLogo: string;
@@ -27,10 +33,98 @@ export interface ShareComposerErrors {
   recipients?: string;
   expiryDate?: string;
   qualities?: string;
+  photoIds?: string;
   brandingTitle?: string;
   brandingLogo?: string;
   brandingAccent?: string;
   brandingWelcomeMessage?: string;
+}
+
+export interface AlbumPhotoFilterCounts {
+  all: number;
+  landscape: number;
+  portrait: number;
+  ready: number;
+  pending: number;
+  failed: number;
+}
+
+export function countAlbumPhotosByFilter(
+  photos: readonly Photo[],
+  brokenThumbIds: Readonly<Record<string, boolean>> = {},
+): AlbumPhotoFilterCounts {
+  let landscape = 0;
+  let portrait = 0;
+  let ready = 0;
+  let pending = 0;
+  let failed = 0;
+
+  for (const photo of photos) {
+    if (photo.orientation === "landscape") {
+      landscape += 1;
+    } else if (photo.orientation === "portrait") {
+      portrait += 1;
+    }
+
+    if (
+      photo.thumbStatus === "failed" ||
+      photo.thumbStatus === "missing" ||
+      brokenThumbIds[photo.id]
+    ) {
+      failed += 1;
+    } else if (photo.thumbStatus === "pending") {
+      pending += 1;
+    } else {
+      ready += 1;
+    }
+  }
+
+  return {
+    all: photos.length,
+    landscape,
+    portrait,
+    ready,
+    pending,
+    failed,
+  };
+}
+
+export function filterAlbumPhotos(
+  photos: readonly Photo[],
+  options: {
+    query: string;
+    orientation: PhotoOrientationFilter;
+    statusFilter: PhotoStatusFilter;
+    brokenThumbIds?: Readonly<Record<string, boolean>>;
+  },
+): Photo[] {
+  const needle = options.query.trim().toLowerCase();
+  const broken = options.brokenThumbIds ?? {};
+
+  return photos.filter((photo) => {
+    if (needle && !photo.name.toLowerCase().includes(needle)) {
+      return false;
+    }
+    if (options.orientation !== "all" && photo.orientation !== options.orientation) {
+      return false;
+    }
+
+    const isFailed =
+      photo.thumbStatus === "failed" ||
+      photo.thumbStatus === "missing" ||
+      Boolean(broken[photo.id]);
+
+    if (options.statusFilter === "failed") {
+      return isFailed;
+    }
+    if (options.statusFilter === "pending") {
+      return photo.thumbStatus === "pending" && !isFailed;
+    }
+    if (options.statusFilter === "ready") {
+      return photo.thumbStatus === "ready" && !isFailed;
+    }
+    return true;
+  });
 }
 
 const SIMPLE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,6 +227,15 @@ export function validateAndBuildShareInput(
     errors.brandingWelcomeMessage = "Keep the welcome note under 500 characters.";
   }
 
+  let frozenPhotoIds: string[] | null = null;
+  if (draft.photoScope === "frozen") {
+    frozenPhotoIds = [...new Set(draft.selectedPhotoIds.map((id) => id.trim()).filter(Boolean))];
+    if (frozenPhotoIds.length === 0) {
+      errors.photoIds =
+        "Select at least one photo for a frozen subset, or switch back to the whole album.";
+    }
+  }
+
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
@@ -161,8 +264,7 @@ export function validateAndBuildShareInput(
     ...(draft.allowDownload ? { allowedQualities } : {}),
     stripMetadata,
     branding: Object.keys(branding).length > 0 ? branding : null,
-    // Frozen subset picker requires the album media workspace (#77).
-    photoIds: null,
+    photoIds: draft.photoScope === "frozen" ? frozenPhotoIds : null,
     ...(draft.mode === "password" ? { password: draft.password } : {}),
     ...(draft.mode === "magic_link" && recipients.length > 0 ? { recipients } : {}),
   };
