@@ -98,7 +98,11 @@ export function NewShareForm({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!albumId) {
+    if (
+      !albumId ||
+      photoScope !== "frozen" ||
+      albumPhotosState.albumId === albumId
+    ) {
       return;
     }
 
@@ -118,7 +122,7 @@ export function NewShareForm({
     return () => {
       cancelled = true;
     };
-  }, [albumId, photosReloadTick]);
+  }, [albumId, photoScope, photosReloadTick, albumPhotosState.albumId]);
 
   const photosLoading = Boolean(albumId) && albumPhotosState.albumId !== albumId;
   const albumPhotos = albumPhotosState.albumId === albumId ? albumPhotosState.photos : [];
