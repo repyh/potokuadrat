@@ -96,7 +96,7 @@ describe("parsePhotoQuery", () => {
   it("defaults to all photos and the default page size", () => {
     expect(parsePhotoQuery(new URLSearchParams())).toEqual({
       ok: true,
-      query: { filter: "all", cursor: null, limit: 50 },
+      query: { filter: "all", sort: "manual", cursor: null, limit: 50 },
     });
   });
 
@@ -108,7 +108,7 @@ describe("parsePhotoQuery", () => {
 
     expect(parsed).toEqual({
       ok: true,
-      query: { filter: "portrait", cursor: { sortIndex: 3, id: PHOTO_ID }, limit: 25 },
+      query: { filter: "portrait", sort: "manual", cursor: { sortIndex: 3, id: PHOTO_ID }, limit: 25 },
     });
   });
 
@@ -172,6 +172,7 @@ describe("listShareGallery", () => {
     });
     expect(repo.listSharePhotos).toHaveBeenCalledWith(share, {
       filter: "landscape",
+      sort: "manual",
       clientSessionId: null,
       cursor: null,
       limit: 10,
@@ -258,5 +259,39 @@ describe("listShareGallery", () => {
       ),
     ).toMatchObject({ ok: false, status: 400 });
     expect(repo.listSharePhotos).not.toHaveBeenCalled();
+  });
+
+  it("parses sort modes, validates sort cursors, and forwards sort to the repository", async () => {
+    const repo = repository();
+    const cursor = encodePhotoCursor({ sort: "name", sortIndex: 2, id: PHOTO_ID });
+
+    const decoded = decodePhotoCursor(cursor);
+    expect(decoded).toEqual({ sort: "name", sortIndex: 2, id: PHOTO_ID });
+
+    const valid = await listShareGallery(
+      repo,
+      request(`?filter=all&sort=name&cursor=${cursor}`),
+      "album-share",
+      new URLSearchParams({ filter: "all", sort: "name", cursor }),
+    );
+    expect(valid.ok).toBe(true);
+    expect(repo.listSharePhotos).toHaveBeenCalledWith(share, {
+      filter: "all",
+      sort: "name",
+      clientSessionId: null,
+      cursor: { sort: "name", sortIndex: 2, id: PHOTO_ID },
+      limit: 50,
+    });
+
+    const mismatched = await listShareGallery(
+      repo,
+      request(`?sort=taken&cursor=${cursor}`),
+      "album-share",
+      new URLSearchParams({ sort: "taken", cursor }),
+    );
+    expect(mismatched).toMatchObject({ ok: false, status: 400 });
+
+    const badSort = parsePhotoQuery(new URLSearchParams({ sort: "random" }));
+    expect(badSort).toEqual({ ok: false, error: "Unsupported photo sort." });
   });
 });

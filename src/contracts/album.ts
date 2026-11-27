@@ -15,6 +15,9 @@ export type PhotoOrientation = (typeof PHOTO_ORIENTATIONS)[number];
 export const PHOTO_FILTERS = ["all", "favorites", "landscape", "portrait"] as const;
 export type PhotoFilter = (typeof PHOTO_FILTERS)[number];
 
+export const PHOTO_SORTS = ["manual", "name", "taken"] as const;
+export type PhotoSort = (typeof PHOTO_SORTS)[number];
+
 export interface Photo {
   id: string;
   name: string;
@@ -56,6 +59,7 @@ export interface PhotoPage {
 
 export interface PhotoQuery {
   filter?: PhotoFilter;
+  sort?: PhotoSort;
   cursor?: string | null;
   limit?: number;
 }

@@ -32,7 +32,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-RUN mkdir -p /app/.cache/thumbs && chown -R nextjs:nodejs /app/.cache
+RUN mkdir -p /app/.cache/thumbs /app/.data/branding \
+  && chown -R nextjs:nodejs /app/.cache /app/.data
 USER nextjs
 
 EXPOSE 3000

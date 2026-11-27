@@ -1,7 +1,13 @@
-import type { GalleryAlbum, GalleryState, SharePolicy } from "@/contracts/share";
+import type {
+  GalleryAlbum,
+  GalleryPreview,
+  GalleryState,
+  SharePolicy,
+} from "@/contracts/share";
 
 import { authorizeShareRequest } from "@/server/shares/access-context";
 import { resolveShareAccess } from "@/server/shares/access";
+import { resolveEffectiveBranding } from "@/server/shares/branding";
 import { resolveStripMetadata } from "@/server/shares/policy";
 import { getShareRepository } from "@/server/shares/runtime";
 
@@ -19,15 +25,40 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
   const authorization = await authorizeShareRequest(repository, request, share);
   const access = resolveShareAccess(share, new Date(), authorization.authorized);
 
+  const resolvedBranding = resolveEffectiveBranding({
+    share: share.shareBranding,
+    album: share.albumBranding,
+    organization: {
+      name: share.organizationName,
+      title: share.organizationTitle,
+      logo: share.organizationLogo,
+      accent: share.organizationAccent,
+      footerEnabled: share.organizationFooterEnabled,
+    },
+  });
+
   let album: GalleryAlbum | null = null;
   let policy: SharePolicy | null = null;
+  let preview: GalleryPreview | null = null;
 
   if (access === "ok") {
     album = {
       slug: share.albumSlug,
       title: share.albumTitle,
       photoCount: share.photoCount,
-      branding: share.albumBranding,
+      totalBytes: share.totalBytes ?? 0,
+      orientationCounts: {
+        landscape: share.landscapeCount ?? 0,
+        portrait: share.portraitCount ?? 0,
+      },
+      footerEnabled: share.organizationFooterEnabled ?? true,
+      branding: {
+        title: resolvedBranding.title,
+        logo: resolvedBranding.logo ?? undefined,
+        accent: resolvedBranding.accent ?? undefined,
+        welcomeMessage: resolvedBranding.welcomeMessage ?? undefined,
+      },
+      resolvedBranding,
       photographerName: share.photographerName,
     };
 
@@ -38,8 +69,15 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
       stripMetadata: resolveStripMetadata(share, share.organizationStripMetadata),
       expiresAt: share.expiresAt?.toISOString() ?? null,
     };
+  } else {
+    preview = {
+      title: share.albumTitle,
+      branding: share.albumBranding,
+      photographerName: share.photographerName,
+      footerEnabled: share.organizationFooterEnabled ?? true,
+    };
   }
 
-  const body: GalleryState = { access, album, policy };
+  const body: GalleryState = { access, album, policy, resolvedBranding, preview };
   return Response.json(body, { headers: { "cache-control": "no-store" } });
 }

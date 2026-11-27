@@ -38,6 +38,7 @@ services:
       DATABASE_URL: postgresql://potokuadrat:potokuadrat@postgres:5432/potokuadrat
       GOOGLE_DRIVE_KEY_FILE: /app/secrets/service-account.json
       THUMB_CACHE_DIR: /app/.cache/thumbs
+      BRANDING_DIR: /app/.data/branding
       HOSTNAME: 0.0.0.0
       PORT: "3000"
     depends_on:
@@ -62,6 +63,7 @@ services:
       start_period: 30s
     volumes:
       - thumbs:/app/.cache/thumbs
+      - branding:/app/.data/branding
       - ./secrets:/app/secrets:ro
     ports:
       - "3000:3000"
@@ -69,3 +71,4 @@ services:
 volumes:
   pgdata:
   thumbs:
+  branding:

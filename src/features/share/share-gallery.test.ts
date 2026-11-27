@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { PHOTO_FILTERS } from "@/contracts/album";
+import { PHOTO_FILTERS, PHOTO_SORTS } from "@/contracts/album";
 import {
   FILTER_LABELS,
+  SORT_LABELS,
   buildShareThumbSrcSet,
   formatExpiry,
+  formatShareBytes,
   resolvePreferredQuality,
 } from "./share-gallery";
 
@@ -18,6 +20,16 @@ describe("FILTER_LABELS", () => {
 
   it("covers exactly the four known filters", () => {
     expect(Object.keys(FILTER_LABELS)).toHaveLength(4);
+  });
+});
+
+describe("SORT_LABELS", () => {
+  it("has a label for every PhotoSort key", () => {
+    for (const s of PHOTO_SORTS) {
+      expect(SORT_LABELS[s]).toBeDefined();
+      expect(typeof SORT_LABELS[s]).toBe("string");
+    }
+    expect(Object.keys(SORT_LABELS)).toHaveLength(3);
   });
 });
 
@@ -66,5 +78,14 @@ describe("buildShareThumbSrcSet", () => {
     expect(buildShareThumbSrcSet("slug", "id", [800, 1600])).toBe(
       "/s/slug/thumb/id?w=800 800w, /s/slug/thumb/id?w=1600 1600w",
     );
+  });
+});
+
+describe("formatShareBytes", () => {
+  it("formats zero and byte magnitudes cleanly", () => {
+    expect(formatShareBytes(0)).toBe("0 B");
+    expect(formatShareBytes(1024)).toBe("1.0 KB");
+    expect(formatShareBytes(24 * 1024 * 1024)).toBe("24.0 MB");
+    expect(formatShareBytes(1.5 * 1024 * 1024 * 1024)).toBe("1.50 GB");
   });
 });
